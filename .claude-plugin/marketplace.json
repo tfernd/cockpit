@@ -1,0 +1,12 @@
+{
+  "name": "tfernd-mods",
+  "owner": { "name": "Thales Fernandes" },
+  "description": "Claude Code mods by Thales Fernandes",
+  "plugins": [
+    {
+      "name": "cockpit",
+      "source": "./",
+      "description": "Session cockpit: context, cache window, tool-call stats, file reads, subagents and a message timeline"
+    }
+  ]
+}
