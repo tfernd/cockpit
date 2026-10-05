@@ -1,0 +1,4 @@
+{
+  "description": "Cockpit hooks module",
+  "modules": ["./register.js"]
+}
