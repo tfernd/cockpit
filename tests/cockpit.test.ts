@@ -8,11 +8,21 @@ const PANE = {
   viewport: { columns: 140, rows: 40 },
   props: { title: 'Cockpit', isFocused: true, bodyColumns: 110, placement: 'inline', scroll: { offset: 0, bodyRows: 20 }, view: {} },
 } as const
+
+// On Desktop the band is one Svg whose `alt` lists every pill; in the terminal it is Text elements in Boxes.
+async function seen(ui: any, surface: string, needle: RegExp) {
+  if (surface === 'desktop') {
+    const svg = await ui.find({ type: 'Svg' })
+    return svg && needle.test(svg.props.alt) ? svg : undefined
+  }
+  return ui.find({ type: 'Text', text: needle })
+}
+
 const TABS = ['overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
 async function boot($: any, on: any, opts: { limits?: any[]; budget?: number } = {}) {
-  mock.clock(on)
+  mock.clock(on, { now: 1_700_000_000_000 })
   const saved = new Map<string, unknown>()
   if (opts.budget) saved.set('budget', opts.budget)
   on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
@@ -69,13 +79,11 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   await boot($, on)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await ui.find({ type: 'Text', text: /28%/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /turn 1/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '5h' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '22%' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '7d' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /⟳ 2h/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '1.23' })).toBeDefined()
+    const missing: string[] = []
+    for (const needle of [/ctx/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /1\.23/, /cache/, /turn 1/]) {
+      if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
+    }
+    expect(missing).toEqual([])
     await ui.unmount()
   }
 })
@@ -84,10 +92,10 @@ test('an enterprise / gateway account shows the spend limit and the monthly budg
   await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200 })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await ui.find({ type: 'Text', text: 'spend limit' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: '5h' })).toBeUndefined()
-    expect(await ui.find({ type: 'Text', text: /\/ \$200/ })).toBeDefined()
+    expect(await seen(ui, surface, /spend/)).toBeDefined()
+    expect(await seen(ui, surface, /42%/)).toBeDefined()
+    expect(await seen(ui, surface, /\/200/)).toBeDefined()
+    expect(await seen(ui, surface, /5h/)).toBeUndefined() // no 5-hour window on a gateway account
     await ui.unmount()
   }
 })
@@ -119,9 +127,9 @@ test('the agents pill and tab count launched, running, finished and failed', asy
   await $.turn.complete({ turnId: 'a2', agentId: 'ag2', reason: 'error', answer: '', durationMs: 900, isAborted: false, usage: null })
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await band.find({ type: 'Text', text: '1/3' })).toBeDefined() // 1 of 3 finished
-    expect(await band.find({ type: 'Text', text: '1 running' })).toBeDefined()
-    expect(await band.find({ type: 'Text', text: '1 failed' })).toBeDefined()
+    expect(await seen(band, surface, /1\/3/)).toBeDefined() // 1 of 3 finished
+    expect(await seen(band, surface, /1 running/)).toBeDefined()
+    expect(await seen(band, surface, /1 failed/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })

@@ -210,8 +210,8 @@ export function register(on) {
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const theirs = await next(e)
     if (e.props.hasSurvey) return theirs
-    const { Box, Text } = $.ui.resolve(e)
-    const mine = band(Box, Text, S, await $.clock.now(), e.props.bodyColumns)
+    const { Box, Text, Svg } = $.ui.resolve(e)
+    const mine = band(Box, Text, S, await $.clock.now(), e.props.bodyColumns, e.surface, Svg)
     if (!mine) return theirs
     return Box({ flexDirection: 'column', children: theirs ? [theirs, mine] : [mine] })
   })
@@ -219,7 +219,7 @@ export function register(on) {
   // ---- drawing: the pane with tabs ----
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (e.requestId !== PANE) return next(e)
-    const { Box, Text, Button } = $.ui.resolve(e)
+    const { Box, Text, Button, Svg } = $.ui.resolve(e)
     const now = await $.clock.now()
     const tabs = TABS.map((t) =>
       Button({
@@ -236,7 +236,7 @@ export function register(on) {
     )
     return Box({
       flexDirection: 'column',
-      children: [Box({ flexDirection: 'row', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now)],
+      children: [Box({ flexDirection: 'row', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg)],
     })
   })
 }
