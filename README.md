@@ -32,7 +32,7 @@ context bar and tokens · 5-hour limit with reset time · weekly limit with rese
     claude plugin validate .
     claude plugin test .                             # draws every tab for terminal and desktop
 
-Desktop installs from GitHub and caches by version: bump `version` in `.claude-plugin/plugin.json`, push, then update the plugin in Plugins.
+Installed from this folder through a local marketplace (`claude plugin install cockpit@tfernandes-mods`), so edits apply to the next session you start; no push or version bump needed.
 
 ## Known limits
 
