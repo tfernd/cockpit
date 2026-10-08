@@ -28,15 +28,17 @@ async function trackSpend($) {
   const month = new Date().toISOString().slice(0, 7)
   const rec = (await $.store.get('spend')) || {}
   let total = rec.month === month ? rec.usd || 0 : 0
+  const since = rec.month === month && rec.since ? rec.since : await $.clock.now() // when this month's tally began
   if (typeof usd === 'number') {
     const delta = S.lastCost === null ? 0 : usd - S.lastCost // first reading: do not count what came before
     S.lastCost = usd
     if (delta > 0) {
       total += delta
-      await $.store.set('spend', { month, usd: total })
+      await $.store.set('spend', { month, usd: total, since })
     }
   }
   S.monthUsd = total
+  S.monthSince = since
   S.budgetUsd = Number(await $.store.get('budget')) || 0
 }
 

@@ -21,10 +21,11 @@ async function seen(ui: any, surface: string, needle: RegExp) {
 const TABS = ['overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
-async function boot($: any, on: any, opts: { limits?: any[]; budget?: number } = {}) {
+async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; spend?: boolean } = {}) {
   mock.clock(on, { now: 1_700_000_000_000 })
   const saved = new Map<string, unknown>()
   if (opts.budget) saved.set('budget', opts.budget)
+  if (opts.spend) saved.set('spend', { month: new Date().toISOString().slice(0, 7), usd: 142, since: Date.now() - 3 * 86_400_000 })
   on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
   on('store.set', ($: any, e: any) => {
     saved.set(e.key, e.value)
@@ -60,7 +61,7 @@ async function boot($: any, on: any, opts: { limits?: any[]; budget?: number } =
       answer: 'ok',
       toolUses: [],
       stopReason: 'end_turn',
-      usage: { model: 'claude-opus-5-5', input_tokens: 5, output_tokens: 40, cache_read_input_tokens: 90_000, cache_creation_input_tokens: 3_000 },
+      usage: { model: e.model, input_tokens: 5, output_tokens: 40, cache_read_input_tokens: e.model === 'claude-opus-5-5' ? 90_000 : 0, cache_creation_input_tokens: e.model === 'claude-opus-5-5' ? 3_000 : 93_000 },
     }
   })
 
@@ -80,30 +81,41 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     const missing: string[] = []
-    for (const needle of [/ctx/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /1\.23/, /cache/, /turn 1/]) {
+    for (const needle of [/ctx/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /turn 1/, /out/, /cached/]) {
       if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
     }
     expect(missing).toEqual([])
+    // subscription: no per-token bill, and the model is already in Claude's own footer
+    expect(await seen(ui, surface, /1\.23/)).toBeUndefined()
+    expect(await seen(ui, surface, /month/)).toBeUndefined()
+    expect(await seen(ui, surface, /opus 5\.5/)).toBeUndefined()
     await ui.unmount()
   }
 })
 
-test('on Desktop the pills stretch so the band fills its slot edge to edge', async ($, on) => {
+test('on Desktop a band that wraps is stretched edge to edge; a short one keeps its natural width', async ($, on) => {
   await boot($, on)
-  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
-  const svg = await ui.find({ type: 'Svg' })
-  expect(svg.props.width).toBe(960) // bodyColumns 120 * 8px
-  expect(svg.props.source).toContain('width="960"')
-  await ui.unmount()
+  // 60 columns * 8px = 480px: too narrow for one row, so every row but a short last one is justified to exactly 480
+  const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 60 }, surface: 'desktop' } as any)
+  const svg = await narrow.find({ type: 'Svg' })
+  expect(svg.props.width).toBe(480)
+  expect(svg.props.source).toContain('width="480"')
+  await narrow.unmount()
+  // 120 columns: everything fits on one row, which is also the last row, so it is not stretched across the slot
+  const wide = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  const w = await wide.find({ type: 'Svg' })
+  expect(w.props.width).toBeLessThanOrEqual(962)
+  expect(w.props.source).toContain('width="' + w.props.width + '"')
+  await wide.unmount()
 })
 
-test('an enterprise / gateway account shows the spend limit and the monthly budget', async ($, on) => {
-  await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200 })
+test('an enterprise / gateway account shows chat cost, the month with its projection, and the limit', async ($, on) => {
+  await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200, spend: true })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await seen(ui, surface, /spend/)).toBeDefined()
-    expect(await seen(ui, surface, /42%/)).toBeDefined()
-    expect(await seen(ui, surface, /\/200/)).toBeDefined()
+    for (const needle of [/spend/, /42%/, /chat/, /1\.23/, /month/, /\$142/, /→ ~\$/, /\/\$200/]) {
+      expect(await seen(ui, surface, needle)).toBeDefined()
+    }
     expect(await seen(ui, surface, /5h/)).toBeUndefined() // no 5-hour window on a gateway account
     await ui.unmount()
   }
@@ -137,13 +149,34 @@ test('the agents pill and tab count launched, running, finished and failed', asy
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
     expect(await seen(band, surface, /1\/3/)).toBeDefined() // 1 of 3 finished
-    expect(await seen(band, surface, /1 running/)).toBeDefined()
-    expect(await seen(band, surface, /1 failed/)).toBeDefined()
+        expect(await seen(band, surface, /1 failed/)).toBeDefined()
+    expect(await seen(band, surface, /Explore/)).toBeDefined() // the still-running agent has a pill of its own
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })
     expect(await ui.find({ type: 'Text', text: /3 launched · 1 finished · 1 running · 1 failed/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /found it/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('a model switch shows what it cost the cache, and the Cache tab lists it', async ($, on) => {
+  await boot($, on)
+  const step = async (model: string, effort: string | undefined) => {
+    const stream = $.turn.step({ turnId: 't2', index: 1, model, effort, messageCount: 4 } as any)
+    let r = await stream.next()
+    while (r.done !== true) r = await stream.next()
+  }
+  await step('claude-sonnet-5-5', 'high') // new model: nothing cached for it, so the whole prefix is written again
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND, surface } as any)
+    expect(await seen(band, surface, /model →/)).toBeDefined()
+    expect(await seen(band, surface, /sonnet 5\.5/)).toBeDefined()
+    expect(await seen(band, surface, /re-cached 93k/)).toBeDefined()
+    await band.unmount()
+    const ui = await $.ui.mount({ ...PANE, surface } as any)
+    await ui.press({ key: 'tab-cache' })
+    expect(await ui.find({ type: 'Text', text: /re-cached 93k tokens/ })).toBeDefined()
     await ui.unmount()
   }
 })
