@@ -88,6 +88,15 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   }
 })
 
+test('on Desktop the pills stretch so the band fills its slot edge to edge', async ($, on) => {
+  await boot($, on)
+  const ui = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
+  const svg = await ui.find({ type: 'Svg' })
+  expect(svg.props.width).toBe(960) // bodyColumns 120 * 8px
+  expect(svg.props.source).toContain('width="960"')
+  await ui.unmount()
+})
+
 test('an enterprise / gateway account shows the spend limit and the monthly budget', async ($, on) => {
   await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200 })
   for (const surface of ['terminal', 'desktop'] as const) {
