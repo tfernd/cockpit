@@ -9,6 +9,7 @@ import {
   onSpawn,
   syncAgents,
   pushMsg,
+  count,
   alerts,
   snapshot,
   restore as restoreState,
@@ -61,6 +62,12 @@ export function register(on) {
   // ---- setup: restore history, start the 1s ticker, add /cockpit ----
   on('session.start', async ($, e, next) => {
     await load($)
+    count(S, 'session.start', await $.clock.now())
+    try {
+      await refresh($) // show context and plan limits straight away, before any turn
+    } catch {
+      // usage not available yet; the ticker retries
+    }
     $.clock.every(1000, () => tick($))
     $.clock.every(15000, () => persist($))
     try {
@@ -96,7 +103,9 @@ export function register(on) {
 
   // ---- tool calls: counts, failures, durations, file reads/edits, todos ----
   on('tool.call', async ($, e, next) => {
-    const key = onToolStart(S, e.tool_use_id, e.tool, e.agentId, await $.clock.now(), e)
+    const t0 = await $.clock.now()
+    const key = onToolStart(S, e.tool_use_id, e.tool, e.agentId, t0, e)
+    count(S, 'tool.call', t0)
     $.ui.invalidate('ui.render')
     let failed = true
     try {
@@ -112,20 +121,26 @@ export function register(on) {
   // ---- model requests: cache read/write, model changes, subagent tokens ----
   on('turn.step', async function* ($, e, next) {
     const result = yield* next(e)
-    onStepEnd(S, e, result, await $.clock.now())
+    const t1 = await $.clock.now()
+    onStepEnd(S, e, result, t1)
+    count(S, e.agentId ? 'turn.step (agent)' : 'turn.step', t1)
     $.ui.invalidate('ui.render')
     return result
   })
 
   // ---- turns ----
   on('turn.start', async ($, e, next) => {
-    onTurnStart(S, e, await $.clock.now())
+    const t = await $.clock.now()
+    onTurnStart(S, e, t)
+    count(S, 'turn.start', t)
     return next(e)
   })
 
   on('turn.complete', async ($, e, next) => {
     const r = await next(e)
-    onTurnComplete(S, e, await $.clock.now())
+    const t = await $.clock.now()
+    onTurnComplete(S, e, t)
+    count(S, e.agentId ? 'turn.complete (agent)' : 'turn.complete', t)
     $.ui.invalidate('ui.render')
     return r
   })
@@ -133,7 +148,9 @@ export function register(on) {
   // ---- subagents and message passing ----
   on('agent.spawn', async ($, e, next) => {
     const r = await next(e)
-    if (r && r.agentId) onSpawn(S, r.agentId, e, r.model, await $.clock.now())
+    const t = await $.clock.now()
+    if (r && r.agentId) onSpawn(S, r.agentId, e, r.model, t)
+    count(S, 'agent.spawn', t)
     return r
   })
 
@@ -157,6 +174,7 @@ export function register(on) {
     S.ctx = e.context
     S.limits = e.rateLimits || []
     S.cost = e.cost || null
+    count(S, 'session.measure', await $.clock.now())
     $.ui.invalidate('ui.render')
     return next(e)
   })
