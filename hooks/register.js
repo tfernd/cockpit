@@ -14,12 +14,31 @@ import {
   snapshot,
   restore as restoreState,
 } from '../lib/model.js'
-import { TABS, band, paneBody } from '../lib/views.js'
+import { TABS } from '../lib/views.js'
+import { band, paneBody } from '../lib/pills.js'
 
 const PANE = 'cockpit'
 let S = newState()
 let tab = 'overview'
 let tickN = 0
+
+// Add this session's cost growth to the month's running total, kept in $.store so every session shares it.
+async function trackSpend($) {
+  const usd = S.cost && S.cost.usd
+  const month = new Date().toISOString().slice(0, 7)
+  const rec = (await $.store.get('spend')) || {}
+  let total = rec.month === month ? rec.usd || 0 : 0
+  if (typeof usd === 'number') {
+    const delta = S.lastCost === null ? 0 : usd - S.lastCost // first reading: do not count what came before
+    S.lastCost = usd
+    if (delta > 0) {
+      total += delta
+      await $.store.set('spend', { month, usd: total })
+    }
+  }
+  S.monthUsd = total
+  S.budgetUsd = Number(await $.store.get('budget')) || 0
+}
 
 // Pull the figures the engine owns (context, plan limits, cost) and the agent list.
 async function refresh($) {
@@ -27,6 +46,7 @@ async function refresh($) {
   S.ctx = u.context
   S.limits = u.rateLimits || []
   S.cost = u.cost || null
+  await trackSpend($)
   syncAgents(S, await $.agent.list())
 }
 
@@ -74,7 +94,7 @@ export function register(on) {
       await $.command.register({
         name: 'cockpit',
         description: 'Open the cockpit pane (context, cache, tools, files, agents)',
-        argumentHint: '[tab | ttl 5|60 | reset]',
+        argumentHint: '[tab | ttl 5|60 | budget 200 | reset]',
         immediate: true,
       })
     } catch {
@@ -90,6 +110,13 @@ export function register(on) {
       S.ttlMin = Number(a[1])
       await $.store.set('ttlMin', S.ttlMin)
       return { text: 'cache lifetime set to ' + a[1] + ' minutes' }
+    }
+    if (a[0] === 'budget') {
+      const v = a[1] === 'off' ? 0 : Number(a[1])
+      if (!(v >= 0)) return { text: 'usage: /cockpit budget 200   (monthly USD)  or  /cockpit budget off' }
+      await $.store.set('budget', v)
+      S.budgetUsd = v
+      return { text: v ? 'monthly budget set to $' + v + ' (counts API-rate cost of sessions run with cockpit loaded)' : 'monthly budget cleared' }
     }
     if (a[0] === 'reset') {
       S = newState(S.ttlMin)
