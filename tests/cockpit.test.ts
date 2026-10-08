@@ -11,9 +11,10 @@ const PANE = {
 const TABS = ['overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
-async function boot($: any, on: any) {
+async function boot($: any, on: any, opts: { limits?: any[]; budget?: number } = {}) {
   mock.clock(on)
   const saved = new Map<string, unknown>()
+  if (opts.budget) saved.set('budget', opts.budget)
   on('store.get', ($: any, e: any) => ({ value: saved.get(e.key) }))
   on('store.set', ($: any, e: any) => {
     saved.set(e.key, e.value)
@@ -27,13 +28,15 @@ async function boot($: any, on: any) {
     value: {
       startedAt: 0,
       context: { tokens: 280_000, window: 1_000_000, percent: 28 },
-      rateLimits: [
-        { kind: 'five_hour', percentUsed: 22, resetsAt: new Date(Date.now() + 3_600_000).toISOString() },
-        { kind: 'seven_day', percentUsed: 58 },
+      rateLimits: opts.limits ?? [
+        { kind: 'five_hour', percentUsed: 22, resetsAt: new Date(Date.now() + 9_000_000).toISOString() },
+        { kind: 'seven_day', percentUsed: 58, resetsAt: new Date(Date.now() + 90_000_000).toISOString() },
       ],
       cost: { usd: 1.23 },
     },
   }))
+  let spawned = 0
+  on('agent.spawn', () => ({ model: 'haiku', agentId: 'ag' + ++spawned }))
   on('session.start', () => ({ cwd: '/work' }))
   on('turn.start', ($: any, e: any) => ({ turnId: e.turnId }))
   on('tool.call', () => ({ result: 'ok' }))
@@ -68,7 +71,23 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     expect(await ui.find({ type: 'Text', text: /28%/ })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: /turn 1/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /5h 22%/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '5h' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '22%' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '7d' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /⟳ 2h/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '1.23' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('an enterprise / gateway account shows the spend limit and the monthly budget', async ($, on) => {
+  await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200 })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface } as any)
+    expect(await ui.find({ type: 'Text', text: 'spend limit' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '42%' })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: '5h' })).toBeUndefined()
+    expect(await ui.find({ type: 'Text', text: /\/ \$200/ })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -85,6 +104,29 @@ test('every pane tab draws a valid tree on both surfaces', async ($, on) => {
     expect(await ui.find({ type: 'Text', text: 'Read' })).toBeDefined()
     await ui.press({ key: 'tab-debug' })
     expect(await ui.find({ type: 'Text', text: 'tool.call' })).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+test('the agents pill and tab count launched, running, finished and failed', async ($, on) => {
+  await boot($, on)
+  const spawn = (d: string) =>
+    ($ as any).agent.spawn({ tool_use_id: 'u' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false })
+  await spawn('one')
+  await spawn('two')
+  await spawn('three')
+  await $.turn.complete({ turnId: 'a1', agentId: 'ag1', reason: 'answer', answer: 'found it', durationMs: 900, isAborted: false, usage: null })
+  await $.turn.complete({ turnId: 'a2', agentId: 'ag2', reason: 'error', answer: '', durationMs: 900, isAborted: false, usage: null })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND, surface } as any)
+    expect(await band.find({ type: 'Text', text: '1/3' })).toBeDefined() // 1 of 3 finished
+    expect(await band.find({ type: 'Text', text: '1 running' })).toBeDefined()
+    expect(await band.find({ type: 'Text', text: '1 failed' })).toBeDefined()
+    await band.unmount()
+    const ui = await $.ui.mount({ ...PANE, surface } as any)
+    await ui.press({ key: 'tab-agents' })
+    expect(await ui.find({ type: 'Text', text: /3 launched · 1 finished · 1 running · 1 failed/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /found it/ })).toBeDefined()
     await ui.unmount()
   }
 })
