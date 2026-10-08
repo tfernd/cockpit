@@ -1,6 +1,6 @@
 {
   "name": "cockpit",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "description": "Session cockpit: context, cache window, tool-call stats, file reads, subagents and a message timeline, in one band and one pane.",
   "author": { "name": "Thales Fernandes" }
 }
