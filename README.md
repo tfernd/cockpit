@@ -1,31 +1,36 @@
 # cockpit
 
-A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289.
+A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. Works in the terminal and in the Desktop Code tab.
 
-**Band above the prompt** (one line): context bar, cache countdown and hit rate, current turn (tools and failures), running subagents, todo progress, 5-hour limit.
+## What you see
 
-**`/cockpit` pane** (keys 1-6 switch tabs):
-1. Overview: context, plan limits, cost, turns, tool calls and failure rate, repeated reads, model, what is running now
-2. Tools: per tool n, failures, mean, sd, p50, p95, p99 (last 500 calls)
-3. Files: reads, edits, repeated reads per file
-4. Cache: window countdown, per-request read / wrote / new / hit%, session totals
-5. Agents: each subagent's status, model, requests, tools, context, current tool, idle time
-6. Timeline: spawns, subagent results, session messages, model changes, compactions
+**Band above the prompt** (one row of chips, dropped by priority when the window is narrow):
+context bar and tokens · cache countdown bar and last hit rate · current turn (tools, failures) · running subagents · 5-hour and weekly plan limits · todo progress · cost · model.
 
-**Toasts**: cache expiring in 30s, context 80% / 90%, a tool running far longer than its own p95, a quiet subagent, the same file read 3 times with no edit.
+**`/cockpit` pane** (keys 1-7 switch tabs):
+1. **Overview**: budget bars (context, 5-hour, weekly, cache window, task progress), stat tiles (turns, tool calls, failures, re-reads, agents, compactions, cost), turn-time mean / sd / p95 / p99, what is running now
+2. **Tools**: per tool calls, failures, mean, sd, p50, p95, p99, with a p95 bar (last 500 calls per tool)
+3. **Files**: reads, edits and repeated reads per file
+4. **Cache**: window countdown, read / wrote / new totals, a stacked bar per request
+5. **Agents**: tree of subagents with status, model, tools, context, what each is doing now, stalled flag, and the result it handed back to main
+6. **Timeline**: spawns, subagent results, session messages, model changes, compactions
+7. **Debug**: which events the recorder has actually seen, and when. Start here if a panel is empty.
+
+**Toasts**: cache expiring in 30 s, context 80% / 90%, a tool running far past its own p95, a quiet subagent, the same file read 3 times with no edit.
 
 **Commands**: `/cockpit [tab]`, `/cockpit ttl 5|60` (cache lifetime, saved), `/cockpit reset`.
 
-## Run it
+## Develop
 
-    claude --plugin-dir /path/to/cockpit
+    claude --plugin-dir ~/claude/plugins/cockpit     # hot reloads on save
+    claude plugin validate .
+    claude plugin test .                             # draws every tab for terminal and desktop
 
-Edits hot-reload. To keep it: put it in a marketplace (see `marketplace.json` example in the mods docs) and `/plugin install`.
+Desktop installs from GitHub and caches by version: bump `version` in `.claude-plugin/plugin.json`, push, then update the plugin in Plugins.
 
 ## Known limits
 
 - Tool durations include time waiting on permission prompts.
 - The cache lifetime is a setting (the API does not report it); the countdown starts at the end of the last main-loop request.
-- Stats are saved every 15 s to `$.store` and restored for the same session id, so a hot reload keeps history; `/clear` starts fresh.
-- Todo progress only reads the `TodoWrite` tool; other task tools are not tracked yet.
-- Not yet run inside a live session: pure logic was smoke-tested and `claude plugin validate` passes, but the drawing has not been looked at on screen.
+- Stats are saved every 15 s and restored for the same session id; `/clear` starts fresh. Counting starts when the plugin loads, not at the start of the conversation.
+- Todo progress only reads the `TodoWrite` tool.
