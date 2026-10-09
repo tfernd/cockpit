@@ -10,6 +10,8 @@ import {
   syncAgents,
   pushMsg,
   count,
+  onStep,
+  onPlan,
   alerts,
   snapshot,
   restore as restoreState,
@@ -90,6 +92,27 @@ export function register(on) {
     } catch {
       // usage not available yet; the ticker retries
     }
+    try {
+      await $.tool.register({
+        name: 'step',
+        description: 'For subagents: report your progress to the Agents tab and band. Call it right after reading your brief with total (your plan, 3-8 steps) and done: 0, then again as each step finishes. Cheap; it only updates a bar.',
+        inputSchema: { type: 'object', properties: { done: { type: 'integer', minimum: 0 }, total: { type: 'integer', minimum: 1 }, note: { type: 'string' } }, required: ['done'] },
+      })
+      await $.tool.register({
+        name: 'plan',
+        description: 'For the orchestrator: post the plan of tasks you will delegate, in order. Each task title should equal the Agent description you use, so the plan can tick off as they finish. Call again to re-plan.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            title: { type: 'string' },
+            tasks: { type: 'array', items: { type: 'object', properties: { title: { type: 'string' }, tier: { type: 'string' }, after: { type: 'array', items: { type: 'integer' } } }, required: ['title'] } },
+          },
+          required: ['tasks'],
+        },
+      })
+    } catch {
+      // tools unavailable in this build: the rest of the mod still works
+    }
     $.clock.every(1000, () => tick($))
     $.clock.every(15000, () => persist($))
     try {
@@ -103,6 +126,19 @@ export function register(on) {
       // name already taken: the pane can still be opened by another mod's command
     }
     return next(e)
+  })
+
+  // Workers report their own steps; the orchestrator posts its plan. Both only update state.
+  on('tool.call', { tool: 'mcp__cockpit__step' }, async ($, e) => {
+    if (!e.agentId) return { result: 'ignored: only subagents report steps' }
+    const ok = onStep(S, e.agentId, e, await $.clock.now())
+    $.ui.invalidate('ui.render')
+    return { result: ok ? 'ok' : 'unknown agent' }
+  })
+  on('tool.call', { tool: 'mcp__cockpit__plan' }, async ($, e) => {
+    onPlan(S, e)
+    $.ui.invalidate('ui.render')
+    return { result: 'ok: plan with ' + (S.plan ? S.plan.tasks.length : 0) + ' tasks' }
   })
 
   on('command.run', { command: 'cockpit' }, async ($, e) => {

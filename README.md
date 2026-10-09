@@ -18,11 +18,13 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 2. **Tools**: per tool calls, failures, mean, sd, p50, p95, p99, with a p95 bar (last 500 calls per tool)
 3. **Files**: reads, edits and repeated reads per file
 4. **Cache**: window countdown, read / wrote / new / output totals, every model or effort switch with the tokens it forced the cache to re-write, a stacked bar per request
-5. **Agents**: fleet progress bar (launched / finished / running / failed), then a tree of subagents with status, model, tools, context, what each is doing now, stalled flag, and the result it handed back to main
+5. **Agents**: fleet progress bar, the plan's progress, a per-type table (runs, done, failed, tokens, cost, average time), then **every** subagent as a tree under the loop that spawned it, with its step progress, tokens, cost and the result it handed back. Nothing is cut off.
 6. **Timeline**: spawns, subagent results, session messages, model changes, compactions
 7. **Debug**: which events the recorder has actually seen, and when. Start here if a panel is empty.
 
 **Toasts**: cache expiring in 30 s, context 80% / 90%, a tool running far past its own p95, a quiet subagent, the same file read 3 times with no edit.
+
+**Workers and the plan**: subagents can call `mcp__cockpit__step` (`done`, `total`, `note`) to report their own steps, and the orchestrator can call `mcp__cockpit__plan` (`title`, `tasks`) to post the plan. The plan shows as a pill until every task is done. Both are optional; without them, cockpit still counts agents from the engine's own events.
 
 **Commands**: `/cockpit [tab]`, `/cockpit ttl 5|60` (cache lifetime, saved), `/cockpit budget 200` (monthly USD budget, `off` clears), `/cockpit reset`.
 

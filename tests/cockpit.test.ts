@@ -180,3 +180,25 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
     await ui.unmount()
   }
 })
+
+test('subagents nest under the loop that spawned them, workers report steps, the plan pill ticks off', async ($, on) => {
+  await boot($, on)
+  const spawn = (d: string, parentAgentId?: string) =>
+    ($ as any).agent.spawn({ tool_use_id: 'x' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false, parentAgentId })
+  const lead = await spawn('lead task')
+  await spawn('child task', lead.agentId)
+  await $.tool.call({ tool: 'mcp__cockpit__step', agentId: lead.agentId, done: 2, total: 5, note: 'reading code' } as any)
+  await $.tool.call({ tool: 'mcp__cockpit__plan', title: 'release', tasks: [{ title: 'lead task', tier: 'careful' }, { title: 'other task', tier: 'light' }] } as any)
+  await $.turn.complete({ turnId: 'z', agentId: lead.agentId, reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, usage: null })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND, surface } as any)
+    expect(await seen(band, surface, /plan/)).toBeDefined()
+    expect(await seen(band, surface, /1\/2/)).toBeDefined()
+    await band.unmount()
+    const ui = await $.ui.mount({ ...PANE, surface } as any)
+    await ui.press({ key: 'tab-agents' })
+    expect(await ui.find({ type: 'Text', text: /├─|└─/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /step 2\/5 · reading code/ })).toBeDefined()
+    await ui.unmount()
+  }
+})
