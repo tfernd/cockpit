@@ -25,21 +25,32 @@ let tab = 'overview'
 let tickN = 0
 
 // Add this session's cost growth to the month's running total, kept in $.store so every session shares it.
+// The plan is read from the limits the account reports. A plan seen once is remembered, because the
+// limits are empty until the first response comes back, and guessing from empty data was wrong.
+function detectPlan() {
+  if (S.limits.some(l => l.kind === 'five_hour' || l.kind === 'seven_day')) return 'subscription'
+  if (S.limits.some(l => l.kind === 'spend_limit')) return 'api'
+  return null
+}
+
+// Month spend only counts on API and enterprise accounts: a subscription has no per-token bill, so its
+// cost estimate is not money spent. Any total left over from before the plan was known is cleared.
 async function trackSpend($) {
   const usd = S.cost && S.cost.usd
   const month = new Date().toISOString().slice(0, 7)
   const rec = (await $.store.get('spend')) || {}
+  const counting = S.account === 'api'
   let total = rec.month === month ? rec.usd || 0 : 0
-  const since = rec.month === month && rec.since ? rec.since : await $.clock.now() // when this month's tally began
+  const since = rec.month === month && rec.since ? rec.since : await $.clock.now()
   if (typeof usd === 'number') {
     const delta = S.lastCost === null ? 0 : usd - S.lastCost // first reading: do not count what came before
     S.lastCost = usd
-    if (delta > 0) {
-      total += delta
-      await $.store.set('spend', { month, usd: total, since })
-    }
+    if (counting && delta > 0) total += delta
   }
-  S.monthUsd = total
+  if (counting ? total !== (rec.usd || 0) || rec.month !== month : rec.usd) {
+    await $.store.set('spend', { month, usd: counting ? total : 0, since })
+  }
+  S.monthUsd = counting ? total : 0
   S.monthSince = since
   S.budgetUsd = Number(await $.store.get('budget')) || 0
 }
@@ -50,6 +61,11 @@ async function refresh($) {
   S.ctx = u.context
   S.limits = u.rateLimits || []
   S.cost = u.cost || null
+  const plan = detectPlan()
+  if (plan && plan !== S.account) {
+    S.account = plan
+    await $.store.set('plan', plan)
+  }
   await trackSpend($)
   syncAgents(S, await $.agent.list())
 }
@@ -79,6 +95,7 @@ async function load($) {
   const snap = await $.store.get('snap')
   const sid = await $.session.id()
   S = snap && snap.sid === sid && snap.S ? restoreState(snap.S, ttlMin) : newState(ttlMin)
+  S.account = (await $.store.get('plan')) || null // remembered from an earlier session
   S.startedAt = S.startedAt || (await $.clock.now())
 }
 

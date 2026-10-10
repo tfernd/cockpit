@@ -214,3 +214,18 @@ test('the Agents tab on Desktop shows one square per subagent, with the plan as 
   expect(svgs.props.alt).toMatch(/3 agents/)
   await ui.unmount()
 })
+
+test('an unknown plan shows no money pills', async ($, on) => {
+  await boot($, on, { limits: [] })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
+  expect(await seen(ui, 'terminal', /month/)).toBeUndefined()
+  expect(await seen(ui, 'terminal', /chat/)).toBeUndefined()
+  await ui.unmount()
+})
+
+test('a subscription never shows a month bill, even with spend recorded before', async ($, on) => {
+  await boot($, on, { spend: true })
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
+  expect(await seen(ui, 'terminal', /month/)).toBeUndefined()
+  await ui.unmount()
+})
