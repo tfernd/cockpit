@@ -202,3 +202,15 @@ test('subagents nest under the loop that spawned them, workers report steps, the
     await ui.unmount()
   }
 })
+
+test('the Agents tab on Desktop shows one square per subagent, with the plan as hollow squares', async ($, on) => {
+  await boot($, on)
+  for (const d of ['a', 'b', 'c']) await ($ as any).agent.spawn({ tool_use_id: 'g' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false })
+  await $.tool.call({ tool: 'mcp__cockpit__plan', title: 'grid', tasks: [{ title: 'a', tier: 'light' }, { title: 'z', tier: 'light' }] } as any)
+  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' } as any)
+  await ui.press({ key: 'tab-agents' })
+  const svgs = await ui.find({ type: 'Svg' })
+  expect(svgs).toBeDefined()
+  expect(svgs.props.alt).toMatch(/3 agents/)
+  await ui.unmount()
+})
