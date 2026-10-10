@@ -150,7 +150,7 @@ test('the agents pill and tab count launched, running, finished and failed', asy
     const band = await $.ui.mount({ ...BAND, surface } as any)
     expect(await seen(band, surface, /1\/3/)).toBeDefined() // 1 of 3 finished
         expect(await seen(band, surface, /1 failed/)).toBeDefined()
-    expect(await seen(band, surface, /three/)).toBeDefined() // the still-running agent has a pill labelled with its task
+    expect(await seen(band, surface, /agents/)).toBeDefined() // the crew pill, with one square per subagent
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })
