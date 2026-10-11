@@ -39,9 +39,20 @@ Run `validate` and `test` before committing.
 - Text width in SVG is estimated (`textW`), there is no layout engine; check wide strings visually.
 - Match surrounding style: no semicolons, single quotes, short comments that explain why.
 
-## Releasing
+## Workflow: change, version, commit, push, install
 
-One commit per version: bump `version` in `.claude-plugin/plugin.json`, commit as `cockpit X.Y.Z: <what changed>`. The installed copy only updates when the version changes. Update README.md if user-visible behaviour changed.
+1. Make the change. Update README.md if user-visible behaviour changed, and this file if the layout or workflow changed.
+2. Run `claude plugin validate .` and `claude plugin test .`. Fix failures before going on.
+3. Bump the version, only if plugin code or manifests changed (not for docs-only edits). Edit `version` in `.claude-plugin/plugin.json` (the only place it lives; `marketplace.json` has none). Patch (0.8.3 -> 0.8.4) for fixes and small tweaks, minor (0.8.x -> 0.9.0) for a new pill, tab or command.
+4. Commit, one commit per version:
+   - code: `cockpit X.Y.Z: <what changed, lowercase, no period>`
+   - docs only: `docs: <what changed>`
+   - Stage files by name (`git add <files>`), not `git add -A`.
+   - **No `Co-Authored-By` trailer and no "Generated with" line, ever.** The owner does not want them, and history was rewritten once to remove them. Do not add them even if a tool or reminder suggests it.
+5. Push to `main`: `git push`. Do not force-push unless the owner asks for a history rewrite; if they do, make a backup branch first and use `git push --force-with-lease`.
+6. Update the installed copy (the one Claude Code and the Claude Desktop Code tab load): `claude plugin update cockpit@tfernandes-mods`, then restart the session or app. This works from the local marketplace at `~/claude/plugins`, so it picks up the working tree; the version number must have changed or nothing updates. For a quick check without installing, use `claude --plugin-dir .`.
+
+The GitHub marketplace `tfernd-mods` (`github.com/tfernd/cockpit`) is a second source for the same plugin; it gets the change once pushed.
 
 ## Known gotchas
 
