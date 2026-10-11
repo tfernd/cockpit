@@ -57,6 +57,7 @@ function html(el) {
     const wrap = p.wrap ?? 'wrap'
     if (wrap === 'wrap') s.push('white-space:pre-wrap;overflow-wrap:anywhere')
     else s.push('white-space:pre;overflow:hidden;text-overflow:ellipsis')
+    if (wrap === 'truncate-start') s.push('direction:rtl;text-align:left;unicode-bidi:plaintext')
     return `<span style="${s.join(';')}">${kids()}</span>`
   }
   if (type === 'Button') {

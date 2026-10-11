@@ -18,21 +18,22 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 **`/cockpit` pane** (keys 1-7 switch tabs):
 1. **Overview**: budget bars (context, 5-hour, weekly, cache window, task progress), stat tiles (turns, tool calls, failures, re-reads, agents, compactions, cost), turn-time mean / sd / p95 / p99, what is running now
 2. **Tools**: per tool calls, failures, mean, sd, p50, p95, p99, with a p95 bar (last 500 calls per tool)
-3. **Files**: reads, edits and repeated reads per file
+3. **Files**: reads, edits and repeated reads per file. Paths are relative to the workspace folder; a file outside it is shown in full with ↗
 4. **Cache**: window countdown, read / wrote / new / output totals, every model or effort switch with the tokens it forced the cache to re-write, a stacked bar per request
-5. **Agents**: (Desktop: the square grid first) fleet progress bar, the plan's progress, a per-type table (runs, done, failed, tokens, cost, average time), then **every** subagent as a tree under the loop that spawned it, with its step progress, tokens, cost and the result it handed back. Nothing is cut off.
+5. **Agents**: (Desktop: the square grid first) fleet bar with the most running at once, the plan's progress, **per-subagent statistics** (time, turns, tools, tokens, cost: mean, p50, p95, max), **by model** and **by type** tables, then the agents themselves. Up to 24 it is a full tree under the loop that spawned each, with step progress and the result handed back. Past that it lists only what needs a look (running, failed, the latest finished), one line each; `/cockpit all` lists everything. Loops that send events but were never announced (a workflow's agents, engine forks) are picked up from those events and marked *unlisted*.
 6. **Timeline**: spawns, subagent results, session messages, model changes, compactions
 7. **Debug**: which events the recorder has actually seen, and when. Start here if a panel is empty.
 
-**Toasts** (each fires once): cache expiring in 30 s, context 80% / 90%, a tool running too long, a subagent quiet for over 2 minutes, the same file read 3 times with no edit. "Too long" is 90 s until a tool has 8 recorded calls, then `max(45 s, 3 × its p95)`. Note the `Agent` tool lasts as long as the whole subagent run, so it trips this on any subagent over 90 s ("Agent running 90s (slow for this tool)"); that is expected, not a fault.
+**Toasts** (each fires once; several of the same kind arrive as one): cache expiring in 30 s, context 80% / 90%, a tool running too long, a subagent quiet for over 2 minutes, the same file read 3 times with no edit. "Too long" is 90 s until a tool has 8 recorded calls, then `max(45 s, 3 × its p95)`. Note the `Agent` tool lasts as long as the whole subagent run, so it trips this on any subagent over 90 s ("Agent running 90s (slow for this tool)"); that is expected, not a fault.
 
 **Workers and the plan**: subagents can call `mcp__cockpit__step` (`done`, `total`, `note`) to report their own steps, and the orchestrator can call `mcp__cockpit__plan` (`title`, `tasks`) to post the plan. The plan shows as a pill until every task is done. Both are optional; without them, cockpit still counts agents from the engine's own events. To make agents use them, paste the block in [AGENTS-SNIPPET.md](AGENTS-SNIPPET.md) into your CLAUDE.md. Checked: both tools are listed in a real `claude -p` session under these names.
 
-**Commands**: `/cockpit [tab]`, `/cockpit ttl 5|60` (cache lifetime, saved), `/cockpit budget 200` (monthly USD budget, `off` clears), `/cockpit plan 100` (what you pay for a subscription per month, `off` clears), `/cockpit reset`.
+**Commands**: `/cockpit [tab]`, `/cockpit ttl 5|60` (cache lifetime, saved), `/cockpit budget 200` (monthly USD budget, `off` clears), `/cockpit plan 100` (what you pay for a subscription per month, `off` clears), `/cockpit account api|subscription|auto` (pin the account type; `auto` reads it off the limits the account reports, and a plain API key reports none, so pin `api` there), `/cockpit all` (list every subagent instead of the busy and recent ones), `/cockpit reset`.
 
 ## What is measured and what is guessed
 
 - **Measured** (reported by Claude Code for every model request, main loop and subagents alike): input, output, cache-read and cache-write tokens, the model, context fill, the 5-hour / weekly / spend-limit percentages with reset times, and the session cost total (`/cost`, API list rates).
+- **Detected**: the account type (subscription or enterprise gateway) from which limit windows the account reports; pin it with `/cockpit account` if that is wrong or empty.
 - **Set by you**: the cache lifetime (`/cockpit ttl`, the API does not report it, so the countdown is a guess from the end of the last main-loop request), the monthly budget, the subscription fee.
 - **Estimated by cockpit**: per-subagent and per-type cost (a built-in price table at list rates), the month projection, the subscription *worth*. Subagent cache windows are not tracked, only the main loop's.
 

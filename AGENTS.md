@@ -40,6 +40,8 @@ After any layout change, regenerate and look at the PNGs:
 
 It copies the plugin to a temp dir, runs `.shots/shots.test.ts` (a seeded busy session, mounts every tab at 64 and 120 columns on the desktop surface, prints the trees), then `.shots/render.mjs` draws them as flexbox HTML in headless Chrome (`google-chrome`, override with `CHROME=`). Read the PNGs, especially the 64-column ones, and check nothing is cut off or misaligned. They approximate the Desktop layout (1 column = 8px); they are not a capture of the app. Commit the updated PNGs with the change.
 
+Seed scale: the script also spawns about 110 agents (some failed, some running, some unlisted) for the `*-big-*` shots; the harness times out at 5 s, so keep per-agent work small.
+
 Layout rules: tables use `minWidth` cells (never cut a number) plus one `flex` cell that truncates or wraps; bars use `fbar` / `fstack` (flexible); sections are `card`s; below `NARROW` columns wide tables drop columns. `flexGrow` must be at most 10000.
 
 ## Conventions

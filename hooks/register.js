@@ -13,6 +13,8 @@ import {
   onStep,
   onPlan,
   alerts,
+  trackPeak,
+  closeStale,
   snapshot,
   restore as restoreState,
 } from '../lib/model.js'
@@ -63,7 +65,9 @@ async function refresh($) {
   S.ctx = u.context
   S.limits = u.rateLimits || []
   S.cost = u.cost || null
-  const plan = detectPlan()
+  // /cockpit account api|subscription pins the plan; auto (the default) reads it off the limits the account reports.
+  const forced = await $.store.get('account')
+  const plan = forced === 'api' || forced === 'subscription' ? forced : detectPlan()
   if (plan && plan !== S.account) {
     S.account = plan
     await $.store.set('plan', plan)
@@ -82,6 +86,8 @@ async function tick($) {
       // usage not available yet; try again next time
     }
   }
+  trackPeak(S)
+  closeStale(S, now)
   for (const text of alerts(S, now)) $.ui.toast('cockpit: ' + text, { timeoutMs: 6000 })
   $.ui.invalidate('ui.render')
 }
@@ -105,6 +111,7 @@ export function register(on) {
   // ---- setup: restore history, start the 1s ticker, add /cockpit ----
   on('session.start', async ($, e, next) => {
     await load($)
+    if (e.cwd) S.cwd = e.cwd
     count(S, 'session.start', await $.clock.now())
     try {
       await refresh($) // show context and plan limits straight away, before any turn
@@ -138,7 +145,7 @@ export function register(on) {
       await $.command.register({
         name: 'cockpit',
         description: 'Open the cockpit pane (context, cache, tools, files, agents)',
-        argumentHint: '[tab | ttl 5|60 | budget 200 | plan 100 | reset]',
+        argumentHint: '[tab | ttl 5|60 | budget 200 | plan 100 | account api|subscription|auto | all | reset]',
         immediate: true,
       })
     } catch {
@@ -181,6 +188,19 @@ export function register(on) {
       await $.store.set('planFee', v)
       S.planFee = v
       return { text: v ? 'subscription fee set to $' + v + '/month, to compare with the API-rate value of your usage' : 'subscription fee cleared' }
+    }
+    if (a[0] === 'account') {
+      if (a[1] !== 'api' && a[1] !== 'subscription' && a[1] !== 'auto') return { text: 'usage: /cockpit account api   |   subscription   |   auto (read it from the limits the account reports)' }
+      await $.store.set('account', a[1])
+      if (a[1] === 'auto') S.account = null
+      else S.account = a[1]
+      return { text: a[1] === 'auto' ? 'account type: read from the limits the account reports' : 'account type pinned to ' + a[1] }
+    }
+    if (a[0] === 'all') {
+      S.listAll = !S.listAll
+      tab = 'agents'
+      await $.ui.open({ id: PANE, title: 'Cockpit', focus: true, closeOnEscape: true })
+      return { text: S.listAll ? 'Agents tab: listing every subagent' : 'Agents tab: listing the busy and recent ones' }
     }
     if (a[0] === 'reset') {
       S = newState(S.ttlMin)

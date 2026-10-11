@@ -1,4 +1,5 @@
 import { expect, mock, test } from 'claude-code/testing'
+import { alerts, newState, onSpawn, onToolStart, showPath } from '../lib/model.js'
 
 const BAND = { plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 3 }, view: {} } } as const
 const PANE = {
@@ -229,4 +230,80 @@ test('a subscription never shows a month bill, even with spend recorded before',
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
   expect(await seen(ui, 'terminal', /month/)).toBeUndefined()
   await ui.unmount()
+})
+
+test('loops the engine never announced (workflow agents) are recorded from their events', async ($, on) => {
+  await boot($, on)
+  await $.tool.call({ tool: 'Read', agentId: 'wf-1', file_path: '/work/a.ts' } as any)
+  await $.turn.complete({ turnId: 'w1', agentId: 'wf-1', reason: 'answer', answer: 'checked', durationMs: 5, isAborted: false, usage: null })
+  await $.tool.call({ tool: 'Read', agentId: 'wf-2', file_path: '/work/b.ts' } as any)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
+  await ui.press({ key: 'tab-agents' })
+  expect(await ui.find({ type: 'Text', text: /2 launched · 1 finished · 1 running/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /2 unlisted/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('120 parallel subagents: counted, summarised, and only the ones worth a look are listed', async ($, on) => {
+  await boot($, on)
+  const spawned: string[] = []
+  for (let i = 0; i < 120; i++) {
+    const r = await ($ as any).agent.spawn({ tool_use_id: 'm' + i, prompt: 'p', description: 'job ' + i, subagentType: i % 2 ? 'Explore' : 'general-purpose', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: true, fork: false })
+    spawned.push(r.agentId)
+  }
+  for (const id of spawned.slice(0, 100)) await $.turn.complete({ turnId: 'f' + id, agentId: id, reason: id === spawned[3] ? 'error' : 'answer', answer: 'ok', durationMs: 1000, isAborted: false, usage: null })
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const band = await $.ui.mount({ ...BAND, surface } as any)
+    expect(await seen(band, surface, /99\/120/)).toBeDefined()
+    await band.unmount()
+    const ui = await $.ui.mount({ ...PANE, surface } as any)
+    await ui.press({ key: 'tab-agents' })
+    expect(await ui.find({ type: 'Text', text: /120 launched · 99 finished · 20 running · 1 failed/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /most at once: 120/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Per subagent \(100 finished\)/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /Subagents to look at/ })).toBeDefined()
+    const rows = await ui.findAll({ type: 'Text', text: /^job \d+$/ })
+    expect(rows.length).toBeLessThan(40) // 120 jobs, a short list
+    await ui.unmount()
+  }
+})
+
+test('files inside the workspace show relative, files outside show in full with a marker', async ($, on) => {
+  await boot($, on)
+  await $.tool.call({ tool: 'Read', file_path: '/work/src/deep/m.ts' } as any)
+  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
+  await ui.press({ key: 'tab-files' })
+  expect(await ui.find({ type: 'Text', text: 'src/deep/m.ts' })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: '↗ /a/x.ts' })).toBeDefined()
+  await ui.unmount()
+})
+
+test('a pinned account type shows API money even when the account reports no limits', async ($, on) => {
+  await boot($, on, { limits: [], budget: 200, spend: true })
+  await $.command.run({ command: 'cockpit', args: 'account api' } as any)
+  const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
+  expect(await seen(ui, 'terminal', /chat/)).toBeDefined()
+  await ui.unmount()
+})
+
+test('toasts: an Agent call never counts as a slow tool, and batches become one toast', async () => {
+  const S: any = newState()
+  const t0 = 1_700_000_000_000
+  onToolStart(S, 'a1', 'Agent', undefined, t0, {})
+  onToolStart(S, 'b1', 'Bash', undefined, t0, {})
+  onToolStart(S, 'b2', 'Bash', undefined, t0, {})
+  for (let i = 0; i < 5; i++) onSpawn(S, 'g' + i, { description: 'job' + i, subagentType: 'Explore' }, 'haiku', t0)
+  const out = alerts(S, t0 + 200_000)
+  expect(out.some((x: string) => /^Agent/.test(x))).toBe(false)
+  expect(out.filter((x: string) => /^Bash x2/.test(x)).length).toBe(1)
+  expect(out.filter((x: string) => /5 subagents quiet/.test(x)).length).toBe(1)
+  expect(alerts(S, t0 + 201_000)).toEqual([]) // each fires once
+})
+
+test('paths: relative inside the workspace, full and flagged outside', async () => {
+  expect(showPath('/w/proj', '/w/proj/src/a.ts')).toEqual({ t: 'src/a.ts', outside: false })
+  expect(showPath('/w/proj/', '/w/proj/a.ts')).toEqual({ t: 'a.ts', outside: false })
+  expect(showPath('/w/proj', '/w/project/a.ts')).toEqual({ t: '/w/project/a.ts', outside: true })
+  expect(showPath('/w/proj', '/etc/hosts')).toEqual({ t: '/etc/hosts', outside: true })
+  expect(showPath(null, '/etc/hosts')).toEqual({ t: '/etc/hosts', outside: false })
 })

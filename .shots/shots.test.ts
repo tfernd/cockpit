@@ -62,9 +62,9 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   for (let t = 1; t <= 4; t++) {
     await $.turn.start({ text: 'go', turnId: 't' + t })
     await step('t' + t, 0, 'claude-opus-5-5', 'xhigh')
-    for (const f of ['/home/me/work/src/server/routes/index.ts', '/home/me/work/src/lib/model.js', '/home/me/work/README.md']) await $.tool.call({ tool: 'Read', file_path: f })
-    await $.tool.call({ tool: 'Edit', file_path: '/home/me/work/src/lib/model.js' })
-    await $.tool.call({ tool: 'Read', file_path: '/home/me/work/src/lib/model.js' })
+    for (const f of ['/work/src/server/routes/index.ts', '/work/src/lib/model.js', '/work/README.md', '/home/me/.config/claude/settings.json']) await $.tool.call({ tool: 'Read', file_path: f })
+    await $.tool.call({ tool: 'Edit', file_path: '/work/src/lib/model.js' })
+    await $.tool.call({ tool: 'Read', file_path: '/work/src/lib/model.js' })
     await $.tool.call({ tool: 'Grep', pattern: 'x' })
     await $.tool.call({ tool: 'Bash', command: 'ls' })
     if (t === 2) await $.tool.call({ tool: 'Bash', command: 'false' })
@@ -93,7 +93,7 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   await clock.advance(20_000)
 
   const dump: Record<string, unknown> = {}
-  for (const columns of [64, 120]) {
+  for (const columns of [52, 120]) {
     const ui = await $.ui.mount({ ...PANE(columns), surface: 'desktop' } as any)
     for (const id of TABS) {
       await ui.press({ key: 'tab-' + id })
@@ -102,6 +102,37 @@ test('dump trees for screenshots', async ($: any, on: any) => {
     await ui.unmount()
     const band = await $.ui.mount({ ...BAND(columns), surface: 'desktop' } as any)
     dump[`band-${columns}`] = await band.drawn()
+    await band.unmount()
+  }
+
+  // A big crew: 110 more agents in parallel, most finished, a few failed, some running, and loops nobody announced.
+  const ids: string[] = []
+  for (let i = 0; i < 110; i++) {
+    const r = await spawn('job ' + i + ' check module ' + (i % 17), i % 3 ? 'Explore' : 'general-purpose')
+    ids.push(r.agentId)
+  }
+  for (let i = 0; i < ids.length; i++) {
+    const id = ids[i]
+    if (i % 9 === 8) continue // still running
+    for (let k = 0; k < 1 + (i % 5 === 0 ? 1 : 0); k++) {
+      if (i % 3 === 0) await $.tool.call({ tool: 'Read', agentId: id, file_path: '/work/a.ts' } as any)
+      const s2 = $.turn.step({ turnId: 'b' + id + k, index: k, model: i % 4 ? 'claude-haiku-5-5' : 'claude-sonnet-5-5', agentId: id, messageCount: 2 } as any)
+      let r2 = await s2.next()
+      while (r2.done !== true) r2 = await s2.next()
+    }
+    await clock.advance(600 + (i % 7) * 900)
+    await $.turn.complete({ turnId: 'bz' + id, agentId: id, reason: i % 23 === 5 ? 'error' : 'answer', answer: 'checked module ' + (i % 17) + ': no problems found in the code under review', durationMs: 4000, isAborted: false, usage: null })
+  }
+  for (const w of ['wf-1', 'wf-2', 'wf-3']) await $.tool.call({ tool: 'Grep', agentId: w, pattern: 'x' } as any)
+  for (const columns of [52, 120]) {
+    const ui = await $.ui.mount({ ...PANE(columns), surface: 'desktop' } as any)
+    for (const id of ['overview', 'agents']) {
+      await ui.press({ key: 'tab-' + id })
+      dump[`${id}-big-${columns}`] = await ui.drawn()
+    }
+    await ui.unmount()
+    const band = await $.ui.mount({ ...BAND(columns), surface: 'desktop' } as any)
+    dump[`band-big-${columns}`] = await band.drawn()
     await band.unmount()
   }
   console.log('@@TREES@@' + JSON.stringify(dump) + '@@END@@')
