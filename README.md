@@ -16,7 +16,7 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 - **crew pill** (only while subagents are running, always on its own last row): done / total, one square per subagent in spawn order (blue running, grey done, red failed, amber stopped, hollow = planned and not started; brighter as its context fills), and failed / running counts. Crews over forty are grouped, each square showing the busiest state in its group.
 
 **`/cockpit` pane** (keys 1-7 switch tabs):
-1. **Overview**: budget bars (context, 5-hour, weekly, cache window, task progress), stat tiles (turns, tool calls, failures, re-reads, agents, compactions, cost), turn-time mean / sd / p95 / p99, what is running now
+1. **Overview**: the same gauges as the pills, as bars with the detail a pill has no room for (tokens, reset times, cache hit rate, task, plan and agent progress, month against budget), then session counters (turns, tool calls, failures, re-reads, compactions), turn-time stats, tokens, money, model, workspace, and what is running now. The pills are not repeated here: they live above the prompt
 2. **Tools**: per tool calls, failures, mean, sd, p50, p95, p99, with a p95 bar (last 500 calls per tool)
 3. **Files**: reads, edits and repeated reads per file. Paths are relative to the workspace folder; a file outside it is shown in full with ↗
 4. **Cache**: window countdown, read / wrote / new / output totals, every model or effort switch with the tokens it forced the cache to re-write, a stacked bar per request
