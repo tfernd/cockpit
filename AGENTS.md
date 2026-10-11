@@ -75,4 +75,4 @@ The GitHub marketplace `tfernd-mods` (`github.com/tfernd/cockpit`) is a second s
 - Tool calls are read from `session.append` rows (the model's `tool_use`, then the `tool_result`), not by wrapping `tool.call`: a wrapper stays open for the whole tool run and holds other hooks (`/cockpit`) up. Do not add `await next(e)` wrappers around slow events. Tests "run a tool" with `runTool` in `tests/cockpit.test.ts`.
 - Tool durations include permission-prompt wait time.
 - The cache TTL is read from Claude Code's own settings and env (`refreshTtl` in `register.js`, `resolveTtl` in `model.js`): values are `"5m"` / `"1h"`, env beats setting, and with nothing set a subscription is 1 h and an API key 5 min (subagents: 5 min). The API does not report it, so `/cockpit ttl` is only the fallback. Keep the `$.env.get` names literal.
-- Stats are restored only for the same session id; `/clear` starts fresh.
+- Stats are restored only for the same session id (one `snap:<sid>` per chat, last six kept); `/clear` starts fresh. The month's spend and the settings are shared by every chat on the machine.

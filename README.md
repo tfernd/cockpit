@@ -5,15 +5,17 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 ## What you see
 
 **Band above the prompt**: pill badges justified edge to edge, spread evenly over the fewest rows they need (3-3-1 rather than 4-2-1; at most three rows on Desktop, two in the terminal, dropping the lowest-priority pills if they do not fit). On Desktop they are drawn as an SVG (rounded, tinted, icons, thin bars, light and dark theme); in the terminal as colored blocks.
-- context, with tokens used of the window
+- context: how full, of what window size (the exact token count is on the Overview tab)
 - *subscription*: 5-hour and weekly windows with reset times
 - *API / enterprise*: spend limit (when the account has one), **chat** cost, and **month** (spent so far → projected, against the budget you set). None of these show on a subscription.
 - *subscription*: a **worth** pill, a guess of what this chat's usage would cost at API rates (≈$ chat, ≈$ month), next to the fee you set with `/cockpit plan 100`
 - cache countdown and hit rate
 - tokens this session: in (new input + cache writes), out, cached (served by the cache)
 - a **model / effort switch** pill for ten minutes after a change, saying whether the cache was kept or re-written
+- The band is laid out in three groups, each on its own rows: gauges (context, cache, limits, plan, tasks), what is happening now (turn, tools, crew), and totals (tokens, money, model switch).
 - current turn and task progress (from `TodoWrite`), plus the plan pill while a posted plan has tasks left
-- **crew pill** (only while subagents are running, always on its own last row): done / total, one square per subagent in spawn order (blue running, grey done, red failed, amber stopped, hollow = planned and not started; brighter as its context fills), and failed / running counts. Crews over forty are grouped, each square showing the busiest state in its group.
+- **tools pill** (only while tools run): how many run in parallel right now, how many of them are inside subagents, and the most seen at once
+- **crew pill** (only while subagents are running): done / total, one square per subagent in spawn order (blue running, grey done, red failed, amber stopped, hollow = planned and not started; brighter as its context fills), and failed / running counts. Crews over forty are grouped, each square showing the busiest state in its group.
 
 **`/cockpit` pane** (keys 1-7 switch tabs):
 1. **Overview**: the same gauges as the pills, as bars with the detail a pill has no room for (tokens, reset times, cache hit rate, task, plan and agent progress, month against budget), then session counters (turns, tool calls, failures, re-reads, compactions), turn-time stats, tokens, money, model, workspace, and what is running now. The pills are not repeated here: they live above the prompt
@@ -62,3 +64,5 @@ PNGs of every tab at a narrow (64 columns) and a wide (120 columns) pane are in 
 - The cache lifetime is a setting (the API does not report it); the countdown starts at the end of the last main-loop request.
 - Stats are saved every 15 s and restored for the same session id; `/clear` starts fresh. Counting starts when the plugin loads, not at the start of the conversation.
 - Todo progress only reads the `TodoWrite` tool.
+
+**Several chats at once**: each chat is its own session with its own recorder, so every pill and tab shows that chat only. What they share is the saved settings (budget, fee, account, `/cockpit ttl`) and the month's spend, to which each chat adds its own growth. Each chat keeps its own saved snapshot (the last six are kept), so resuming one restores its own stats.

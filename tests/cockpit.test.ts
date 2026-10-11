@@ -332,3 +332,16 @@ test('subagent caches count from the end of each one\'s last request', () => {
   expect(subCache(S, 310_000)).toMatchObject({ seen: 2, warm: 1, next: 190_000 })
   expect(subCache(S, 700_000).warm).toBe(0)
 })
+
+test('the band counts tools running in parallel, how many are in subagents, and the peak', async ($, on) => {
+  await boot($, on)
+  const open = (name: string, agentId?: string) => $.session.append({ agentId, message: { type: 'assistant', content: [{ type: 'tool_use', id: 'p' + name + (agentId ?? ''), name, input: {} }] } })
+  await open('Bash')
+  await open('Read')
+  await open('Grep', 'ag1')
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...BAND, surface } as any)
+    for (const needle of [/running/, /1 in agents/]) expect(await seen(ui, surface, needle)).toBeDefined()
+    await ui.unmount()
+  }
+})

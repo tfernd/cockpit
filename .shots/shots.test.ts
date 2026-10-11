@@ -96,6 +96,7 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   }
   await $.turn.complete({ turnId: 'z1', agentId: lead.agentId, reason: 'answer', answer: 'the model lives in lib/model.js; views are pure functions of its state', durationMs: 31_000, isAborted: false, usage: null })
   await $.turn.complete({ turnId: 'z2', agentId: kid.agentId, reason: 'error', answer: '', durationMs: 9_000, isAborted: false, usage: null })
+  for (const [n, a] of [['Bash', undefined], ['Read', undefined], ['Grep', lead.agentId]] as const) await $.session.append({ agentId: a, message: { type: 'assistant', content: [{ type: 'tool_use', id: 'run' + n, name: n, input: {} }] } } as any)
   await clock.advance(20_000)
 
   const dump: Record<string, unknown> = {}

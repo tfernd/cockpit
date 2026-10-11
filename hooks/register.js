@@ -129,16 +129,25 @@ async function tick($) {
 
 async function persist($) {
   const sid = await $.session.id()
-  await $.store.set('snap', { sid, S: snapshot(S) })
+  // One snapshot per chat: several chats at once used to overwrite each other's single slot. Keep the last few.
+  await $.store.set('snap:' + sid, snapshot(S))
+  const idx = ((await $.store.get('snaps')) || []).filter((x) => x !== sid)
+  idx.unshift(sid)
+  for (const old of idx.splice(6)) await $.store.set('snap:' + old, undefined)
+  await $.store.set('snaps', idx)
 }
 
 async function load($) {
   const ttl = await $.store.get('ttlMin')
   const ttlMin = ttl === 60 ? 60 : 5
   const manual = ttl === 60 || ttl === 5 ? ttl : null // only what the user set with /cockpit ttl
-  const snap = await $.store.get('snap')
   const sid = await $.session.id()
-  S = snap && snap.sid === sid && snap.S ? restoreState(snap.S, ttlMin) : newState(ttlMin)
+  let snap = await $.store.get('snap:' + sid)
+  if (!snap) {
+    const old = await $.store.get('snap') // the single slot of versions before 0.12.2
+    if (old && old.sid === sid) snap = old.S
+  }
+  S = snap ? restoreState(snap, ttlMin) : newState(ttlMin)
   S.ttlManual = manual
   S.account = (await $.store.get('plan')) || null // remembered from an earlier session
   S.startedAt = S.startedAt || (await $.clock.now())
