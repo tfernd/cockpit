@@ -15,6 +15,12 @@ const PANE = (columns: number) =>
 const BAND = (columns: number) => ({ plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: columns, scroll: { offset: 0, bodyRows: 3 }, view: {} } }) as const
 const TABS = ['overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
 
+async function runTool($: any, tool: string, input: Record<string, unknown> = {}, agentId?: string) {
+  const id = 'tu' + Math.random().toString(36).slice(2)
+  await $.session.append({ agentId, message: { type: 'assistant', content: [{ type: 'tool_use', id, name: tool, input }] } })
+  await $.session.append({ agentId, message: { type: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok' }] } })
+}
+
 test('dump trees for screenshots', async ($: any, on: any) => {
   if (!OUT) return
   const clock = mock.clock(on, { now: 1_700_000_000_000 })
@@ -62,13 +68,13 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   for (let t = 1; t <= 4; t++) {
     await $.turn.start({ text: 'go', turnId: 't' + t })
     await step('t' + t, 0, 'claude-opus-5-5', 'xhigh')
-    for (const f of ['/work/src/server/routes/index.ts', '/work/src/lib/model.js', '/work/README.md', '/home/me/.config/claude/settings.json']) await $.tool.call({ tool: 'Read', file_path: f })
-    await $.tool.call({ tool: 'Edit', file_path: '/work/src/lib/model.js' })
-    await $.tool.call({ tool: 'Read', file_path: '/work/src/lib/model.js' })
-    await $.tool.call({ tool: 'Grep', pattern: 'x' })
-    await $.tool.call({ tool: 'Bash', command: 'ls' })
-    if (t === 2) await $.tool.call({ tool: 'Bash', command: 'false' })
-    await $.tool.call({ tool: 'TodoWrite', todos: [{ status: 'completed' }, { status: 'completed' }, { status: 'in_progress' }, { status: 'pending' }, { status: 'pending' }] })
+    for (const f of ['/work/src/server/routes/index.ts', '/work/src/lib/model.js', '/work/README.md', '/home/me/.config/claude/settings.json']) await runTool($, 'Read', { file_path: f })
+    await runTool($, 'Edit', { file_path: '/work/src/lib/model.js' })
+    await runTool($, 'Read', { file_path: '/work/src/lib/model.js' })
+    await runTool($, 'Grep', { pattern: 'x' })
+    await runTool($, 'Bash', { command: 'ls' })
+    if (t === 2) await runTool($, 'Bash', { command: 'false' })
+    await runTool($, 'TodoWrite', { todos: [{ status: 'completed' }, { status: 'completed' }, { status: 'in_progress' }, { status: 'pending' }, { status: 'pending' }] })
     await $.turn.complete({ turnId: 't' + t, reason: 'answer', answer: 'done', durationMs: 18_000 + t * 7_000, isAborted: false, usage: null })
     if (t === 2) {
       await step('t2b', 1, 'claude-sonnet-5-5', 'medium')

@@ -71,10 +71,17 @@ async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; sp
   const stream = $.turn.step({ turnId: 't1', index: 0, model: 'claude-opus-5-5', messageCount: 1 })
   let step = await stream.next()
   while (step.done !== true) step = await stream.next()
-  await $.tool.call({ tool: 'Read', file_path: '/a/x.ts' })
-  await $.tool.call({ tool: 'Read', file_path: '/a/x.ts' })
-  await $.tool.call({ tool: 'Bash', command: 'ls' })
+  await runTool($, 'Read', { file_path: '/a/x.ts' })
+  await runTool($, 'Read', { file_path: '/a/x.ts' })
+  await runTool($, 'Bash', { command: 'ls' })
   await $.turn.complete({ turnId: 't1', reason: 'answer', answer: 'done', durationMs: 4200, isAborted: false, usage: null })
+}
+
+// The recorder reads the rows the session keeps, so a test "runs a tool" by appending the model's tool_use and then the tool_result.
+async function runTool($: any, tool: string, input: Record<string, unknown> = {}, agentId?: string, isError = false) {
+  const id = 'tu' + Math.random().toString(36).slice(2)
+  await $.session.append({ agentId, message: { type: 'assistant', content: [{ type: 'tool_use', id, name: tool, input }] } })
+  await $.session.append({ agentId, message: { type: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok', is_error: isError }] } })
 }
 
 test('the band draws context, cache, turn and limits on both surfaces', async ($, on) => {
@@ -234,9 +241,9 @@ test('a subscription never shows a month bill, even with spend recorded before',
 
 test('loops the engine never announced (workflow agents) are recorded from their events', async ($, on) => {
   await boot($, on)
-  await $.tool.call({ tool: 'Read', agentId: 'wf-1', file_path: '/work/a.ts' } as any)
+  await runTool($, 'Read', { file_path: '/work/a.ts' }, 'wf-1')
   await $.turn.complete({ turnId: 'w1', agentId: 'wf-1', reason: 'answer', answer: 'checked', durationMs: 5, isAborted: false, usage: null })
-  await $.tool.call({ tool: 'Read', agentId: 'wf-2', file_path: '/work/b.ts' } as any)
+  await runTool($, 'Read', { file_path: '/work/b.ts' }, 'wf-2')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
   await ui.press({ key: 'tab-agents' })
   expect(await ui.find({ type: 'Text', text: /2 launched · 1 finished · 1 running/ })).toBeDefined()
@@ -270,7 +277,7 @@ test('120 parallel subagents: counted, summarised, and only the ones worth a loo
 
 test('files inside the workspace show relative, files outside show in full with a marker', async ($, on) => {
   await boot($, on)
-  await $.tool.call({ tool: 'Read', file_path: '/work/src/deep/m.ts' } as any)
+  await runTool($, 'Read', { file_path: '/work/src/deep/m.ts' })
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
   await ui.press({ key: 'tab-files' })
   expect(await ui.find({ type: 'Text', text: 'src/deep/m.ts' })).toBeDefined()

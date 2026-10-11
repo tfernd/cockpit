@@ -72,6 +72,7 @@ The GitHub marketplace `tfernd-mods` (`github.com/tfernd/cockpit`) is a second s
 ## Known gotchas
 
 - The `Agent` tool's duration is the whole subagent run, so the generic "tool running N s (slow for this tool)" toast fires for any subagent over 90 s. Subagents have their own "quiet" alert in `alerts()`.
+- Tool calls are read from `session.append` rows (the model's `tool_use`, then the `tool_result`), not by wrapping `tool.call`: a wrapper stays open for the whole tool run and holds other hooks (`/cockpit`) up. Do not add `await next(e)` wrappers around slow events. Tests "run a tool" with `runTool` in `tests/cockpit.test.ts`.
 - Tool durations include permission-prompt wait time.
 - The cache TTL is a user setting, not reported by the API.
 - Stats are restored only for the same session id; `/clear` starts fresh.

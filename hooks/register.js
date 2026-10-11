@@ -213,20 +213,23 @@ export function register(on) {
   })
 
   // ---- tool calls: counts, failures, durations, file reads/edits, todos ----
-  on('tool.call', async ($, e, next) => {
-    const t0 = await $.clock.now()
-    const key = onToolStart(S, e.tool_use_id, e.tool, e.agentId, t0, e)
-    count(S, 'tool.call', t0)
-    $.ui.invalidate('ui.render')
-    let failed = true
-    try {
-      const r = await next(e)
-      failed = !!(r && (r.deny || r.isError))
-      return r
-    } finally {
-      onToolEnd(S, key, failed, await $.clock.now())
-      $.ui.invalidate('ui.render')
+  // Read off the rows the session keeps (the model's tool_use block, then the tool's tool_result) instead of wrapping
+  // tool.call: a wrapper stays open for the whole tool run, and /cockpit and other hooks would queue behind it.
+  on('session.append', async ($, e, next) => {
+    const t = await $.clock.now()
+    let seen = false
+    for (const b of e.message.content || []) {
+      if (b.type === 'tool_use') {
+        onToolStart(S, b.id, b.name, e.agentId, t, b.input)
+        count(S, 'tool.call', t)
+        seen = true
+      } else if (b.type === 'tool_result') {
+        onToolEnd(S, b.tool_use_id, !!b.is_error, t)
+        seen = true
+      }
     }
+    if (seen) $.ui.invalidate('ui.render')
+    return next(e)
   })
 
   // ---- model requests: cache read/write, model changes, subagent tokens ----
