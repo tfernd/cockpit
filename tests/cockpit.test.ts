@@ -85,8 +85,9 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
       if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
     }
     expect(missing).toEqual([])
-    // subscription: no per-token bill, and the model is already in Claude's own footer
-    expect(await seen(ui, surface, /1\.23/)).toBeUndefined()
+    // subscription: no per-token bill, only a guess of what the usage is worth at API rates; the model is already in Claude's own footer
+    expect(await seen(ui, surface, /worth/)).toBeDefined()
+    expect(await seen(ui, surface, /≈\$1\.23/)).toBeDefined()
     expect(await seen(ui, surface, /month/)).toBeUndefined()
     expect(await seen(ui, surface, /opus 5\.5/)).toBeUndefined()
     await ui.unmount()

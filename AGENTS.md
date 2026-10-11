@@ -16,6 +16,7 @@ Guide for agents working on this repo. For what the plugin does, read [README.md
 | `lib/pills.js` | `pillSpecs()` decides *what* pills to show (pure data); terminal renderer (colored Boxes); `band()` and `paneBody()`. |
 | `lib/svgband.js` | Desktop renderer: pills as one SVG, row balancing and justification, crew squares, `dotGridSvg`. |
 | `tests/cockpit.test.ts` | Tests using `claude-code/testing`. |
+| `.shots/` | Screenshot pipeline (see below). Dot-folder, so `claude plugin test .` skips it. |
 
 Data flow: hook events -> `model.js` mutators on the module-level `S` -> `ui.invalidate` -> `ui.render` hooks call `pillSpecs(S)` -> renderer for the surface.
 
@@ -28,6 +29,18 @@ claude --plugin-dir . # hot reloads on save
 ```
 
 Run `validate` and `test` before committing.
+
+### Screenshots
+
+After any layout change, regenerate and look at the PNGs:
+
+```
+.shots/run.sh docs/screenshots
+```
+
+It copies the plugin to a temp dir, runs `.shots/shots.test.ts` (a seeded busy session, mounts every tab at 64 and 120 columns on the desktop surface, prints the trees), then `.shots/render.mjs` draws them as flexbox HTML in headless Chrome (`google-chrome`, override with `CHROME=`). Read the PNGs, especially the 64-column ones, and check nothing is cut off or misaligned. They approximate the Desktop layout (1 column = 8px); they are not a capture of the app. Commit the updated PNGs with the change.
+
+Layout rules: tables use `minWidth` cells (never cut a number) plus one `flex` cell that truncates or wraps; bars use `fbar` / `fstack` (flexible); sections are `card`s; below `NARROW` columns wide tables drop columns. `flexGrow` must be at most 10000.
 
 ## Conventions
 

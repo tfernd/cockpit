@@ -33,13 +33,14 @@ function detectPlan() {
   return null
 }
 
-// Month spend only counts on API and enterprise accounts: a subscription has no per-token bill, so its
-// cost estimate is not money spent. Any total left over from before the plan was known is cleared.
+// The month total adds up the engine's own cost figure (what /cost shows, at API list rates) for every session that
+// ran with cockpit loaded. On API / enterprise accounts it is shown as spend; on a subscription it is only what the
+// usage would have cost at API rates, shown as a guess of its worth.
 async function trackSpend($) {
   const usd = S.cost && S.cost.usd
   const month = new Date().toISOString().slice(0, 7)
   const rec = (await $.store.get('spend')) || {}
-  const counting = S.account === 'api'
+  const counting = true
   let total = rec.month === month ? rec.usd || 0 : 0
   const since = rec.month === month && rec.since ? rec.since : await $.clock.now()
   if (typeof usd === 'number') {
@@ -53,6 +54,7 @@ async function trackSpend($) {
   S.monthUsd = counting ? total : 0
   S.monthSince = since
   S.budgetUsd = Number(await $.store.get('budget')) || 0
+  S.planFee = Number(await $.store.get('planFee')) || 0
 }
 
 // Pull the figures the engine owns (context, plan limits, cost) and the agent list.
@@ -136,7 +138,7 @@ export function register(on) {
       await $.command.register({
         name: 'cockpit',
         description: 'Open the cockpit pane (context, cache, tools, files, agents)',
-        argumentHint: '[tab | ttl 5|60 | budget 200 | reset]',
+        argumentHint: '[tab | ttl 5|60 | budget 200 | plan 100 | reset]',
         immediate: true,
       })
     } catch {
@@ -172,6 +174,13 @@ export function register(on) {
       await $.store.set('budget', v)
       S.budgetUsd = v
       return { text: v ? 'monthly budget set to $' + v + ' (counts API-rate cost of sessions run with cockpit loaded)' : 'monthly budget cleared' }
+    }
+    if (a[0] === 'plan') {
+      const v = a[1] === 'off' ? 0 : Number(a[1])
+      if (!(v >= 0)) return { text: 'usage: /cockpit plan 100   (what you pay per month, USD)  or  /cockpit plan off' }
+      await $.store.set('planFee', v)
+      S.planFee = v
+      return { text: v ? 'subscription fee set to $' + v + '/month, to compare with the API-rate value of your usage' : 'subscription fee cleared' }
     }
     if (a[0] === 'reset') {
       S = newState(S.ttlMin)
