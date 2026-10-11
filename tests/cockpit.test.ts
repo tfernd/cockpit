@@ -90,7 +90,7 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     const missing: string[] = []
-    for (const needle of [/ctx/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /turn 1/, /out/, /cached/]) {
+    for (const needle of [/context/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /turn 1/, /out/, /cached/]) {
       if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
     }
     expect(missing).toEqual([])
