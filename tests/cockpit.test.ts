@@ -1,3 +1,4 @@
+import { resolveTtl, parseTtl, subCache } from '../lib/model.js'
 import { expect, mock, test } from 'claude-code/testing'
 import { alerts, newState, onSpawn, onToolStart, showPath } from '../lib/model.js'
 
@@ -313,4 +314,21 @@ test('paths: relative inside the workspace, full and flagged outside', async () 
   expect(showPath('/w/proj', '/w/project/a.ts')).toEqual({ t: '/w/project/a.ts', outside: true })
   expect(showPath('/w/proj', '/etc/hosts')).toEqual({ t: '/etc/hosts', outside: true })
   expect(showPath(null, '/etc/hosts')).toEqual({ t: '/etc/hosts', outside: false })
+})
+
+test('cache lifetimes follow Claude Code: env beats setting, a subscription is 1 h on its own, subagents are 5 min unless 1 h is enabled', () => {
+  expect(resolveTtl({ account: 'subscription' })).toEqual({ main: 60, sub: 5, src: 'auto' })
+  expect(resolveTtl({ account: 'api' })).toEqual({ main: 5, sub: 5, src: 'auto' })
+  expect(resolveTtl({ setMain: '1h', envMain: '5m', account: 'subscription' }).main).toBe(5)
+  expect(resolveTtl({ setMain: '1h', setSub: '1h' })).toEqual({ main: 60, sub: 60, src: 'setting' })
+  expect(resolveTtl({ enable1h: true, account: 'api' })).toEqual({ main: 60, sub: 60, src: 'env' })
+  expect(resolveTtl({ force5m: true, account: 'subscription' }).main).toBe(5)
+  expect(resolveTtl({ manual: 5, account: 'subscription' }).main).toBe(5)
+  expect(parseTtl('bogus')).toBeNull()
+})
+
+test('subagent caches count from the end of each one\'s last request', () => {
+  const S: any = { ttlSubMin: 5, agents: { a: { stepAt: 1000 }, b: { stepAt: 200_000 }, c: {} } }
+  expect(subCache(S, 310_000)).toMatchObject({ seen: 2, warm: 1, next: 190_000 })
+  expect(subCache(S, 700_000).warm).toBe(0)
 })

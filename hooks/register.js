@@ -17,6 +17,7 @@ import {
   closeStale,
   snapshot,
   restore as restoreState,
+  resolveTtl,
 } from '../lib/model.js'
 import { TABS } from '../lib/views.js'
 import { band, paneBody } from '../lib/pills.js'
@@ -71,9 +72,42 @@ async function refresh($) {
   if (plan && plan !== S.account) {
     S.account = plan
     await $.store.set('plan', plan)
+    await refreshTtl($) // the automatic lifetime depends on the account type
   }
   await trackSpend($)
   syncAgents(S, await $.agent.list())
+}
+
+// Which cache lifetime Claude Code is really using, read from its settings and environment (the literal names are listed
+// by `claude plugin validate`). What it cannot tell us (a subscription in overage drops to 5 minutes) /cockpit ttl covers.
+async function refreshTtl($) {
+  let set = {}
+  try {
+    set = (await $.settings.read()) || {}
+  } catch {
+    // settings not readable: fall back to automatic
+  }
+  const flag = (v) => v === '1' || v === 'true'
+  const env = async (get) => {
+    try {
+      return await get()
+    } catch {
+      return undefined // an unreadable variable counts as unset
+    }
+  }
+  const r = resolveTtl({
+    envMain: await env(() => $.env.get('CLAUDE_CODE_PROMPT_CACHE_TTL')),
+    envSub: await env(() => $.env.get('CLAUDE_CODE_SUBAGENT_PROMPT_CACHE_TTL')),
+    setMain: set.promptCacheTtl,
+    setSub: set.subagentPromptCacheTtl,
+    force5m: flag(await env(() => $.env.get('FORCE_PROMPT_CACHING_5M'))),
+    enable1h: flag(await env(() => $.env.get('ENABLE_PROMPT_CACHING_1H'))),
+    manual: S.ttlManual,
+    account: S.account,
+  })
+  S.ttlMin = r.main
+  S.ttlSubMin = r.sub
+  S.ttlSource = r.src
 }
 
 async function tick($) {
@@ -86,6 +120,7 @@ async function tick($) {
       // usage not available yet; try again next time
     }
   }
+  if (tickN % 60 === 0) await refreshTtl($).catch(() => {}) // settings and env rarely change: once a minute is enough
   trackPeak(S)
   closeStale(S, now)
   for (const text of alerts(S, now)) $.ui.toast('cockpit: ' + text, { timeoutMs: 6000 })
@@ -100,9 +135,11 @@ async function persist($) {
 async function load($) {
   const ttl = await $.store.get('ttlMin')
   const ttlMin = ttl === 60 ? 60 : 5
+  const manual = ttl === 60 || ttl === 5 ? ttl : null // only what the user set with /cockpit ttl
   const snap = await $.store.get('snap')
   const sid = await $.session.id()
   S = snap && snap.sid === sid && snap.S ? restoreState(snap.S, ttlMin) : newState(ttlMin)
+  S.ttlManual = manual
   S.account = (await $.store.get('plan')) || null // remembered from an earlier session
   S.startedAt = S.startedAt || (await $.clock.now())
 }
@@ -115,6 +152,7 @@ export function register(on) {
     count(S, 'session.start', await $.clock.now())
     try {
       await refresh($) // show context and plan limits straight away, before any turn
+      await refreshTtl($)
     } catch {
       // usage not available yet; the ticker retries
     }
@@ -145,7 +183,7 @@ export function register(on) {
       await $.command.register({
         name: 'cockpit',
         description: 'Open the cockpit pane (context, cache, tools, files, agents)',
-        argumentHint: '[tab | ttl 5|60 | budget 200 | plan 100 | account api|subscription|auto | all | reset]',
+        argumentHint: '[tab | ttl 5|60|auto | budget 200 | plan 100 | account api|subscription|auto | all | reset]',
         immediate: true,
       })
     } catch {
@@ -170,10 +208,17 @@ export function register(on) {
   on('command.run', { command: 'cockpit' }, async ($, e) => {
     const a = String(e.args || '').trim().toLowerCase().split(/\s+/)
     if (a[0] === 'ttl') {
-      if (a[1] !== '5' && a[1] !== '60') return { text: 'usage: /cockpit ttl 5   or   /cockpit ttl 60' }
-      S.ttlMin = Number(a[1])
-      await $.store.set('ttlMin', S.ttlMin)
-      return { text: 'cache lifetime set to ' + a[1] + ' minutes' }
+      if (a[1] === 'auto') {
+        S.ttlManual = null
+        await $.store.set('ttlMin', undefined)
+        await refreshTtl($)
+        return { text: 'cache lifetime: read from Claude Code settings (' + S.ttlMin + ' min main, ' + S.ttlSubMin + ' min subagents)' }
+      }
+      if (a[1] !== '5' && a[1] !== '60') return { text: 'usage: /cockpit ttl 5   or   /cockpit ttl 60   or   /cockpit ttl auto' }
+      S.ttlManual = Number(a[1])
+      await $.store.set('ttlMin', S.ttlManual)
+      await refreshTtl($)
+      return { text: 'cache lifetime set to ' + a[1] + ' minutes' + (S.ttlSource === 'manual' ? '' : ' (but ' + (S.ttlSource === 'env' ? 'an environment variable' : 'a Claude Code setting') + ' sets ' + S.ttlMin + ' min and wins)') }
     }
     if (a[0] === 'budget') {
       const v = a[1] === 'off' ? 0 : Number(a[1])
