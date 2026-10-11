@@ -291,7 +291,7 @@ export function register(on) {
     )
     return Box({
       flexDirection: 'column',
-      children: [Box({ flexDirection: 'row', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg)],
+      children: [Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg)],
     })
   })
 }
