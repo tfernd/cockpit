@@ -20,7 +20,7 @@ async function seen(ui: any, surface: string, needle: RegExp) {
   return ui.find({ type: 'Text', text: needle })
 }
 
-const TABS = ['trace', 'usage', 'tools', 'files', 'agents', 'timeline', 'debug']
+const TABS = ['trace', 'usage', 'files', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
 async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; spend?: boolean } = {}) {
@@ -138,7 +138,8 @@ test('every pane tab draws a valid tree on both surfaces', async ($, on) => {
       await ui.press({ key: 'tab-' + id })
       expect(await ui.find({ key: 'tab-' + id })).toBeDefined()
     }
-    await ui.press({ key: 'tab-tools' })
+    await ui.press({ key: 'tab-trace' })
+    expect(await ui.find({ type: 'Text', text: 'Tools this session' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'Read' })).toBeDefined()
     await ui.press({ key: 'tab-debug' })
     expect(await ui.find({ type: 'Text', text: 'tool.call' })).toBeDefined()
@@ -160,8 +161,8 @@ test('the now pill and the Agents tab count launched, running, finished and fail
     expect(await seen(band, surface, /1 agent/)).toBeDefined() // the now pill counts the one still running
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    await ui.press({ key: 'tab-agents' })
-    expect(await ui.find({ type: 'Text', text: /3 launched · 1 finished · 1 running · 1 failed/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /3 subagents · 1 done · 1 running · 1 failed/ })).toBeDefined()
+    await ui.press({ key: 'sp-a:ag1' })
     expect(await ui.find({ type: 'Text', text: /found it/ })).toBeDefined()
     await ui.unmount()
   }
@@ -186,7 +187,7 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
   }
 })
 
-test('subagents nest under the loop that spawned them, workers report steps', async ($, on) => {
+test('subagents nest under the loop that spawned them in Trace, with their step progress and the plan', async ($, on) => {
   await boot($, on)
   const spawn = (d: string, parentAgentId?: string) =>
     ($ as any).agent.spawn({ tool_use_id: 'x' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false, parentAgentId })
@@ -200,23 +201,12 @@ test('subagents nest under the loop that spawned them, workers report steps', as
     expect(await seen(band, surface, /1 agent/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    await ui.press({ key: 'tab-agents' })
-    expect(await ui.find({ type: 'Text', text: /├─|└─/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /child task/ })).toBeDefined() // nested under lead task's row
+    expect(await ui.find({ type: 'Text', text: /plan release 1\/2/ })).toBeDefined()
+    await ui.press({ key: 'sp-a:' + lead.agentId })
     expect(await ui.find({ type: 'Text', text: /step 2\/5 · reading code/ })).toBeDefined()
     await ui.unmount()
   }
-})
-
-test('the Agents tab on Desktop shows one square per subagent, with the plan as hollow squares', async ($, on) => {
-  await boot($, on)
-  for (const d of ['a', 'b', 'c']) await ($ as any).agent.spawn({ tool_use_id: 'g' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false })
-  await $.tool.call({ tool: 'mcp__cockpit__plan', title: 'grid', tasks: [{ title: 'a', tier: 'light' }, { title: 'z', tier: 'light' }] } as any)
-  const ui = await $.ui.mount({ ...PANE, surface: 'desktop' } as any)
-  await ui.press({ key: 'tab-agents' })
-  const svgs = await ui.find({ type: 'Svg' })
-  expect(svgs).toBeDefined()
-  expect(svgs.props.alt).toMatch(/3 agents/)
-  await ui.unmount()
 })
 
 test('an unknown plan shows no money pills', async ($, on) => {
@@ -240,9 +230,8 @@ test('loops the engine never announced (workflow agents) are recorded from their
   await $.turn.complete({ turnId: 'w1', agentId: 'wf-1', reason: 'answer', answer: 'checked', durationMs: 5, isAborted: false, usage: null })
   await runTool($, 'Read', { file_path: '/work/b.ts' }, 'wf-2')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
-  await ui.press({ key: 'tab-agents' })
-  expect(await ui.find({ type: 'Text', text: /2 launched · 1 finished · 1 running/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /2 unlisted/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /2 subagents · 1 done · 1 running/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /unlisted/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -259,13 +248,8 @@ test('120 parallel subagents: counted, summarised, and only the ones worth a loo
     expect(await seen(band, surface, /20 agents/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    await ui.press({ key: 'tab-agents' })
-    expect(await ui.find({ type: 'Text', text: /120 launched · 99 finished · 20 running · 1 failed/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /most at once: 120/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Per subagent \(100 finished\)/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /Subagents to look at/ })).toBeDefined()
-    const rows = await ui.findAll({ type: 'Text', text: /^job \d+$/ })
-    expect(rows.length).toBeLessThan(40) // 120 jobs, a short list
+    expect(await ui.find({ type: 'Text', text: /120 subagents · 99 done · 20 running · 1 failed · most at once 120/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /more rows/ })).toBeDefined() // the list is capped, not 120 rows
     await ui.unmount()
   }
 })

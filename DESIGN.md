@@ -1,6 +1,6 @@
 # DESIGN.md
 
-The plan for cockpit's next version: a trace waterfall ("where did the time go") in place of the stats tables, and a calmer band. The data it needs is in [SCHEMA.md](SCHEMA.md). Status: steps 1 to 3 built in 0.13.0 (span recorder, realistic seed, Trace tab), step 4 in 0.14.0 (band), and Overview and Cache merged into Usage in 0.15.0. Tools, Agents and Timeline stay until Trace covers them: per-tool p95 stats, step progress and the plan, the 100+ agent summary, and session messages are not in Trace yet.
+The plan for cockpit's next version: a trace waterfall ("where did the time go") in place of the stats tables, and a calmer band. The data it needs is in [SCHEMA.md](SCHEMA.md). Status: steps 1 to 3 built in 0.13.0 (span recorder, realistic seed, Trace tab), step 4 in 0.14.0 (band), Overview and Cache merged into Usage in 0.15.0, and Tools, Agents and Timeline folded into Trace in 0.16.0 (crew line, plan, step progress, per-tool stats). Session messages to and from other sessions are no longer shown.
 
 ## What is wrong now
 

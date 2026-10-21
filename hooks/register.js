@@ -9,7 +9,6 @@ import {
   onTurnComplete,
   onSpawn,
   syncAgents,
-  pushMsg,
   count,
   onStep,
   onPlan,
@@ -202,7 +201,7 @@ export function register(on) {
       await $.command.register({
         name: 'cockpit',
         description: 'Open the cockpit pane (context, cache, tools, files, agents)',
-        argumentHint: '[tab | ttl 5|60|auto | budget 200 | plan 100 | account api|subscription|auto | all | reset]',
+        argumentHint: '[tab | ttl 5|60|auto | budget 200 | plan 100 | account api|subscription|auto | reset]',
         immediate: true,
       })
     } catch {
@@ -259,12 +258,6 @@ export function register(on) {
       if (a[1] === 'auto') S.account = null
       else S.account = a[1]
       return { text: a[1] === 'auto' ? 'account type: read from the limits the account reports' : 'account type pinned to ' + a[1] }
-    }
-    if (a[0] === 'all') {
-      S.listAll = !S.listAll
-      tab = 'agents'
-      await $.ui.open({ id: PANE, title: 'Cockpit', focus: true, closeOnEscape: true })
-      return { text: S.listAll ? 'Agents tab: listing every subagent' : 'Agents tab: listing the busy and recent ones' }
     }
     if (a[0] === 'reset') {
       view = { root: null, open: {}, sel: null }
@@ -336,19 +329,8 @@ export function register(on) {
     return r
   })
 
-  on('session.send', async ($, e, next) => {
-    pushMsg(S, await $.clock.now(), 'send', (typeof e.to === 'string' ? e.to : JSON.stringify(e.to)) + ': ' + e.text)
-    return next(e)
-  })
-
-  on('session.receive', async ($, e, next) => {
-    pushMsg(S, await $.clock.now(), 'recv', (e.origin && e.origin.kind) + ': ' + e.text)
-    return next(e)
-  })
-
   on('session.compact', async ($, e, next) => {
     S.compactions++
-    pushMsg(S, await $.clock.now(), 'compact', 'conversation compacted')
     return next(e)
   })
 

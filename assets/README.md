@@ -38,35 +38,11 @@ Context, plan limits, money, session stats, and the prompt cache: window, hit ra
 
 ![Usage tab](usage-big-120.png)
 
-## Tools tab
-
-Calls, failures and durations per tool. [52 columns](tools-52.png).
-
-![Tools tab](tools-120.png)
-
 ## Files tab
 
 Reads, edits and re-reads per file. [52 columns](files-52.png).
 
 ![Files tab](files-120.png)
-
-## Agents tab
-
-Subagents: status, models, steps, plan. [52 columns](agents-52.png).
-
-![Agents tab](agents-120.png)
-
-## Agents tab, big crew
-
-Subagents: status, models, steps, plan. [52 columns](agents-big-52.png).
-
-![Agents tab](agents-big-120.png)
-
-## Timeline tab
-
-Spawns, results, messages, model switches. [52 columns](timeline-52.png).
-
-![Timeline tab](timeline-120.png)
 
 ## Debug tab
 

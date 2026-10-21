@@ -28,7 +28,7 @@ All events, grouped. "Cockpit" marks the ones `hooks/register.js` hooks today. E
 | `session.append` | every row a conversation keeps (main and subagents) | yes | tool spans (start, end, input, error text) |
 | `session.measure` | after each main turn, when a limit moves a point | yes | context, limits, cost |
 | `session.compact` | before compaction | yes | marker on the timeline |
-| `session.send` / `session.receive` | message to / from another agent or session | yes | message markers |
+| `session.send` / `session.receive` | message to / from another agent or session | | message markers |
 | `session.attach` / `session.detach` | a remote client joins / leaves | | |
 | `turn.start` | a turn begins (main or subagent), before its first request | yes | turn span start |
 | `turn.step` (stream) | one model request | yes | LLM span (model, effort, tokens, stop) |

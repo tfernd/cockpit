@@ -104,10 +104,7 @@ const VIEWS = [
   ['band', 'Band above the prompt', 'The pills: gauges, what runs now, totals.'],
   ['trace', 'Trace tab', 'Where the time went: every model call, tool call and subagent of one prompt on a shared time axis.'],
   ['usage', 'Usage tab', 'Context, plan limits, money, session stats, and the prompt cache: window, hit rate, switches, each request.'],
-  ['tools', 'Tools tab', 'Calls, failures and durations per tool.'],
   ['files', 'Files tab', 'Reads, edits and re-reads per file.'],
-  ['agents', 'Agents tab', 'Subagents: status, models, steps, plan.'],
-  ['timeline', 'Timeline tab', 'Spawns, results, messages, model switches.'],
   ['debug', 'Debug tab', 'Which events the recorder has seen.'],
 ]
 const md = ['# Gallery', '', 'Every view of the cockpit, drawn by `make render` from a seeded session (`.shots/shots.test.ts`). The pane\'s element tree is laid out as flexbox HTML in headless Chrome (1 column = 8 px), so this shows the layout, not a capture of the Desktop app. Each view is shown 120 columns wide; the 52-column version is linked. `big` is the same session with about 110 more subagents.', '']

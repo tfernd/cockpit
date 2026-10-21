@@ -13,7 +13,7 @@ const PANE = (columns: number) =>
     props: { title: 'Cockpit', isFocused: true, bodyColumns: columns - 4, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
   }) as const
 const BAND = (columns: number) => ({ plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: columns, scroll: { offset: 0, bodyRows: 3 }, view: {} } }) as const
-const TABS = ['trace', 'usage', 'tools', 'files', 'agents', 'timeline', 'debug']
+const TABS = ['trace', 'usage', 'files', 'debug']
 
 // A tool call as the session records it: the model's tool_use, `ms` of work on the mocked clock, then the tool_result.
 let clock: any
@@ -168,7 +168,7 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   for (const w of ['wf-1', 'wf-2', 'wf-3']) await $.tool.call({ tool: 'Grep', agentId: w, pattern: 'x' } as any)
   for (const columns of [52, 120]) {
     const ui = await $.ui.mount({ ...PANE(columns), surface: 'desktop' } as any)
-    for (const id of ['trace', 'usage', 'agents']) {
+    for (const id of ['trace', 'usage']) {
       await ui.press({ key: 'tab-' + id })
       dump[`${id}-big-${columns}`] = await ui.drawn()
     }
