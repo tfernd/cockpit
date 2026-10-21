@@ -127,10 +127,11 @@ async function tick($) {
   trackPeak(S)
   closeStale(S, now)
   for (const text of alerts(S, now)) $.ui.toast('cockpit: ' + text, { timeoutMs: 6000 })
-  // Redraw when the band would read differently, or while something runs (the Trace tab's bars grow).
+  // Redraw when the band would read differently, or every 5 s while something runs (the Trace tab's lanes grow).
+  // Not every second: on Desktop each redraw swaps the whole SVG, and a swap every second reads as blinking.
   const sig = JSON.stringify(pillSpecs(S, now))
   const busy = Object.keys(S.running).length || S.curTurn || Object.values(S.agents).some((a) => a.status === 'running')
-  if (sig !== shown || busy) {
+  if (sig !== shown || (busy && tickN % 5 === 0)) {
     shown = sig
     $.ui.invalidate('ui.render')
   }
