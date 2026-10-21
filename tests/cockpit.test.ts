@@ -411,10 +411,9 @@ test('the Trace tab draws the waterfall on both surfaces; rows select, open and 
     expect(await ui.find({ type: 'Text', text: /tool call · failed/ })).toBeDefined()
     // close the subagent: its tool row goes; open it again: it is back
     const agentKey = 'sp-a:' + r.agentId
-    await ui.press({ key: agentKey })
-    await ui.press({ key: agentKey })
+    await ui.press({ key: 'fold-a:' + r.agentId })
     expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
-    await ui.press({ key: agentKey })
+    await ui.press({ key: 'fold-a:' + r.agentId })
     expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeDefined()
     // show failed only: the Bash stays, the subagent's Grep goes; back to all
     await ui.press({ key: 'filter-failed' })

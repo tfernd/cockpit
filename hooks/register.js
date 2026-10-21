@@ -359,13 +359,15 @@ export function register(on) {
     const { Box, Text, Button, Svg } = $.ui.resolve(e)
     const now = await $.clock.now()
     const redraw = () => $.ui.invalidate('ui.render')
-    // What the Trace tab's buttons do: pick a span (pressing a closed parent opens it; pressing the selected one toggles it),
-    // and page between traces.
+    // What the Trace tab's buttons do: select a span (null closes its card), open or close a parent, page between traces.
     const ctl = {
       ...view,
-      press: (id, isOpen, isParent) => {
-        if (isParent && (view.sel === id || isOpen === false)) view.open = { ...view.open, [id]: !isOpen }
+      press: (id) => {
         view.sel = id
+        redraw()
+      },
+      toggle: (id, isOpen) => {
+        view.open = { ...view.open, [id]: !isOpen }
         redraw()
       },
       show: (rootId) => {
