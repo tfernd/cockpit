@@ -1,6 +1,6 @@
 import { resolveTtl, parseTtl, subCache } from '../lib/model.js'
 import { expect, mock, test } from 'claude-code/testing'
-import { alerts, newState, onSpawn, onToolStart, showPath } from '../lib/model.js'
+import { alerts, newState, onSpawn, onToolStart, onToolEnd, onStepStart, onStepEnd, onTurnStart, onTurnComplete, showPath, traceRoots, traceTree, snapshot, restore, MAX_SPANS } from '../lib/model.js'
 
 const BAND = { plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 3 }, view: {} } } as const
 const PANE = {
@@ -20,7 +20,7 @@ async function seen(ui: any, surface: string, needle: RegExp) {
   return ui.find({ type: 'Text', text: needle })
 }
 
-const TABS = ['overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
+const TABS = ['trace', 'overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
 async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; spend?: boolean } = {}) {
@@ -342,6 +342,106 @@ test('the band counts tools running in parallel, how many are in subagents, and 
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     for (const needle of [/running/, /1 in agents/]) expect(await seen(ui, surface, needle)).toBeDefined()
+    await ui.unmount()
+  }
+})
+
+// ---------- trace ----------
+const usage = (model: string) => ({ usage: { model, input_tokens: 10, output_tokens: 200, cache_read_input_tokens: 50_000, cache_creation_input_tokens: 1_000 }, stopReason: 'end_turn' })
+
+// One prompt: a model call, two tools (one fails), a background subagent with its own model call and tool,
+// then a turn the subagent wakes while it still runs, then the subagent ends.
+function seedTrace() {
+  const S: any = newState()
+  onTurnStart(S, { turnId: 't1', text: 'ship the pricing page' }, 1000)
+  onStepStart(S, { turnId: 't1', index: 0, model: 'claude-opus-5-5' }, 1000)
+  onStepEnd(S, { turnId: 't1', index: 0, model: 'claude-opus-5-5' }, usage('claude-opus-5-5'), 4000)
+  onToolStart(S, 'r1', 'Read', undefined, 4000, { file_path: '/work/a.ts' })
+  onToolEnd(S, 'r1', false, 4200)
+  onToolStart(S, 'b1', 'Bash', undefined, 4200, { command: 'pnpm test', description: 'Run checkout tests' })
+  onToolEnd(S, 'b1', true, 12_600, '2 of 14 checkout tests fail')
+  onToolStart(S, 'ag1', 'Agent', undefined, 13_000, { description: 'research competitors' })
+  onSpawn(S, 'x1', { tool_use_id: 'ag1', description: 'research competitors', subagentType: 'Explore', background: true }, 'claude-sonnet-5-5', 13_100)
+  onToolEnd(S, 'ag1', false, 13_400) // a background agent's call returns at once: its span runs on
+  onTurnStart(S, { agentId: 'x1', turnId: 'x1t' }, 13_200)
+  onStepStart(S, { turnId: 'x1t', index: 0, model: 'claude-sonnet-5-5', agentId: 'x1' }, 13_200)
+  onStepEnd(S, { turnId: 'x1t', index: 0, model: 'claude-sonnet-5-5', agentId: 'x1' }, usage('claude-sonnet-5-5'), 20_000)
+  onToolStart(S, 'w1', 'WebSearch', 'x1', 20_000, { query: 'linear pricing' })
+  onToolEnd(S, 'w1', false, 25_400)
+  onTurnComplete(S, { turnId: 't1', reason: 'answer', answer: 'started', durationMs: 13_000, isAborted: false }, 14_000)
+  onTurnStart(S, { turnId: 't2', text: '' }, 30_000) // woken while x1 still runs: same trace
+  onTurnComplete(S, { turnId: 't2', reason: 'answer', answer: '', durationMs: 1000, isAborted: false }, 31_000)
+  onTurnComplete(S, { turnId: 'x1t', agentId: 'x1', reason: 'answer', answer: 'Linear charges per seat', durationMs: 40_000, isAborted: false }, 53_000)
+  return S
+}
+
+test('the trace nests model calls, tools and subagents under their prompt, timed by their own events', () => {
+  const S = seedTrace()
+  const roots = traceRoots(S)
+  expect(roots.map((r: any) => r.n)).toEqual(['ship the pricing page'])
+  const { kids, end } = traceTree(S, roots[0].id, 60_000)
+  const names = (id: string) => (kids[id] || []).map((s: any) => s.k + ':' + s.n)
+  expect(names('u:t1')).toEqual(['llm:model call', 'tool:Read', 'tool:Bash', 'agent:research competitors', 'turn:'])
+  // the Agent call became the subagent's span: it ends with the subagent's run, not when the call returned
+  const agent = S.spans['t:ag1']
+  expect([agent.k, agent.d, agent.m, agent.t0, agent.t1, agent.st, agent.res]).toEqual(['agent', 'Explore', 'claude-sonnet-5-5', 13_000, 53_000, 'ok', 'Linear charges per seat'])
+  expect(names('t:ag1')).toEqual(['llm:model call', 'tool:WebSearch'])
+  const bash = S.spans['t:b1']
+  expect([bash.st, bash.err, bash.d]).toEqual(['err', '2 of 14 checkout tests fail', 'Run checkout tests'])
+  const call = S.spans['l:main:t1:0']
+  expect([call.t0, call.t1, call.tok]).toEqual([1000, 4000, 51_210])
+  expect(call.cost).toBeGreaterThan(0)
+  expect(end['u:t1']).toBe(53_000) // the prompt's trace lasts until its subagent is done
+})
+
+test('a prompt sent once the subagents are done starts a new trace; the oldest traces go past the cap', () => {
+  const S = seedTrace()
+  onTurnStart(S, { turnId: 't3', text: 'now the docs' }, 60_000)
+  expect(traceRoots(S).map((r: any) => r.n)).toEqual(['ship the pricing page', 'now the docs'])
+  for (let i = 0; i < MAX_SPANS + 10; i++) {
+    onToolStart(S, 'm' + i, 'Read', undefined, 61_000 + i, { file_path: '/x' })
+    onToolEnd(S, 'm' + i, false, 61_000 + i)
+  }
+  expect(Object.keys(S.spans).length).toBeLessThanOrEqual(MAX_SPANS)
+  expect(traceRoots(S).map((r: any) => r.n)).toEqual(['now the docs'])
+  expect(S.spans['t:ag1']).toBeUndefined()
+})
+
+test('the trace survives a snapshot and restore', () => {
+  const S = seedTrace()
+  const back: any = restore(JSON.parse(JSON.stringify(snapshot(S))), 5)
+  expect(Object.keys(back.spans)).toEqual(Object.keys(S.spans))
+  expect(back.trace).toBe('u:t1')
+})
+
+test('the Trace tab draws the waterfall on both surfaces; rows select, open and close, and the card shows the error', async ($, on) => {
+  await boot($, on)
+  // a second prompt with a failing tool and a subagent that runs one tool
+  await $.turn.start({ text: 'fix the checkout', turnId: 't2' })
+  await $.session.append({ message: { type: 'assistant', content: [{ type: 'tool_use', id: 'tu-fail', name: 'Bash', input: { command: 'pnpm test checkout' } }] } } as any)
+  await $.session.append({ message: { type: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-fail', content: [{ type: 'text', text: '2 of 14 checkout tests fail' }], is_error: true }] } } as any)
+  const r = await $.agent.spawn({ tool_use_id: 'u-sub', prompt: 'p', description: 'read the tests', subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false } as any)
+  await runTool($, 'Grep', { pattern: 'coupon' }, r.agentId)
+  for (const surface of ['terminal', 'desktop'] as const) {
+    const ui = await $.ui.mount({ ...PANE, surface } as any)
+    await ui.press({ key: 'tab-trace' })
+    for (const needle of [/^Trace$/, /fix the checkout/, /● live/, /trace 2 of 2/, /tool calls/, /read the tests/, /Grep/, /coupon/]) expect([surface, needle, !!(await ui.find({ type: 'Text', text: needle }))]).toEqual([surface, needle, true])
+    // the failed Bash: select it, the card shows what failed
+    expect(await ui.find({ type: 'Text', text: /2 of 14 checkout tests fail/ })).toBeUndefined()
+    await ui.press({ key: 'sp-t:tu-fail' })
+    expect(await ui.find({ type: 'Text', text: /2 of 14 checkout tests fail/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /tool call · failed/ })).toBeDefined()
+    // close the subagent: its tool row goes; open it again: it is back
+    const agentKey = 'sp-a:' + r.agentId
+    await ui.press({ key: agentKey })
+    await ui.press({ key: agentKey })
+    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
+    await ui.press({ key: agentKey })
+    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeDefined()
+    // page back to the first trace and forth again
+    await ui.press({ key: 'trace-prev' })
+    expect(await ui.find({ type: 'Text', text: /trace 1 of 2/ })).toBeDefined()
+    await ui.press({ key: 'trace-next' })
     await ui.unmount()
   }
 })

@@ -22,6 +22,7 @@ Who reads this: any agent working on this repo, and the owner. For what the plug
 | `.render/` | Scratch of `make render` (`trees.json`, the HTML pages). Git-ignored, never committed. |
 | `scripts/check-docs.mjs` | `make docs`: line budgets, every path the docs name exists, SCHEMA.md matches the types' version. |
 | `.githooks/` | `commit-msg` rejects AI attribution; `pre-commit` runs the docs check. Enabled by `make setup`. |
+| `DESIGN.md` | The plan for the next version (trace waterfall, calmer band, four tabs): what is wrong now, the span recorder, how it draws, build order. |
 | `SCHEMA.md` | Hook events and payloads, `$` calls, the transcript files on disk, and what a trace waterfall would need. Update it when a Claude Code release changes the types. |
 
 Data flow: hook events -> `model.js` mutators on the module-level `S` -> `ui.invalidate` -> `ui.render` hooks call `pillSpecs(S)` -> renderer for the surface.

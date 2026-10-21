@@ -102,6 +102,7 @@ for (const [name, tree] of Object.entries(trees)) {
 // The gallery: one section per view, the wide shot shown and the narrow one linked.
 const VIEWS = [
   ['band', 'Band above the prompt', 'The pills: gauges, what runs now, totals.'],
+  ['trace', 'Trace tab', 'Where the time went: every model call, tool call and subagent of one prompt on a shared time axis.'],
   ['overview', 'Overview tab', 'Budget bars, session stats, what is running.'],
   ['tools', 'Tools tab', 'Calls, failures and durations per tool.'],
   ['files', 'Files tab', 'Reads, edits and re-reads per file.'],

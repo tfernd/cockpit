@@ -3,6 +3,7 @@ import {
   newState,
   onToolStart,
   onToolEnd,
+  onStepStart,
   onStepEnd,
   onTurnStart,
   onTurnComplete,
@@ -24,7 +25,9 @@ import { band, paneBody } from '../lib/pills.js'
 
 const PANE = 'cockpit'
 let S = newState()
-let tab = 'overview'
+let tab = 'trace'
+// Trace tab: which trace is shown (null = the latest), rows opened or closed by hand, the selected span.
+let view = { root: null, open: {}, sel: null }
 let tickN = 0
 
 // Add this session's cost growth to the month's running total, kept in $.store so every session shares it.
@@ -257,6 +260,7 @@ export function register(on) {
       return { text: S.listAll ? 'Agents tab: listing every subagent' : 'Agents tab: listing the busy and recent ones' }
     }
     if (a[0] === 'reset') {
+      view = { root: null, open: {}, sel: null }
       S = newState(S.ttlMin)
       S.startedAt = await $.clock.now()
       return { text: 'cockpit stats cleared' }
@@ -278,7 +282,8 @@ export function register(on) {
         count(S, 'tool.call', t)
         seen = true
       } else if (b.type === 'tool_result') {
-        onToolEnd(S, b.tool_use_id, !!b.is_error, t)
+        const text = typeof b.content === 'string' ? b.content : (b.content || []).map((c) => c.text || '').join(' ')
+        onToolEnd(S, b.tool_use_id, !!b.is_error, t, text)
         seen = true
       }
     }
@@ -288,6 +293,8 @@ export function register(on) {
 
   // ---- model requests: cache read/write, model changes, subagent tokens ----
   on('turn.step', async function* ($, e, next) {
+    onStepStart(S, e, await $.clock.now()) // the request's own span: it ends when the response is in
+    $.ui.invalidate('ui.render')
     const result = yield* next(e)
     const t1 = await $.clock.now()
     onStepEnd(S, e, result, t1)
@@ -362,6 +369,21 @@ export function register(on) {
     if (e.requestId !== PANE) return next(e)
     const { Box, Text, Button, Svg } = $.ui.resolve(e)
     const now = await $.clock.now()
+    const redraw = () => $.ui.invalidate('ui.render')
+    // What the Trace tab's buttons do: pick a span (pressing a closed parent opens it; pressing the selected one toggles it),
+    // and page between traces.
+    const ctl = {
+      ...view,
+      press: (id, isOpen, isParent) => {
+        if (isParent && (view.sel === id || isOpen === false)) view.open = { ...view.open, [id]: !isOpen }
+        view.sel = id
+        redraw()
+      },
+      show: (rootId) => {
+        view = { root: rootId, open: {}, sel: null }
+        redraw()
+      },
+    }
     const tabs = TABS.map((t) =>
       Button({
         key: 'tab-' + t.id,
@@ -377,7 +399,7 @@ export function register(on) {
     )
     return Box({
       flexDirection: 'column',
-      children: [Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg)],
+      children: [Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg, Button, ctl)],
     })
   })
 }

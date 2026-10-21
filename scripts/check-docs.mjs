@@ -4,7 +4,7 @@ import { readFileSync, existsSync, readdirSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 
 const root = join(dirname(new URL(import.meta.url).pathname), '..')
-const BUDGET = { 'AGENTS.md': 150, 'SCHEMA.md': 400, 'README.md': 120, 'AGENTS-SNIPPET.md': 40 } // adding a rule means merging or removing one
+const BUDGET = { 'AGENTS.md': 150, 'SCHEMA.md': 400, 'DESIGN.md': 150, 'README.md': 120, 'AGENTS-SNIPPET.md': 40 } // adding a rule means merging or removing one
 const DOCS = [...Object.keys(BUDGET), 'assets/README.md']
 const GENERATED = ['.claude-plugin/types', '.render'] // named by the docs, made by Claude Code or `make render`
 const tops = new Set(readdirSync(root))

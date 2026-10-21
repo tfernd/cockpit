@@ -14,6 +14,18 @@ The pills: gauges, what runs now, totals. [52 columns](band-big-52.png).
 
 ![Band above the prompt](band-big-120.png)
 
+## Trace tab
+
+Where the time went: every model call, tool call and subagent of one prompt on a shared time axis. [52 columns](trace-52.png).
+
+![Trace tab](trace-120.png)
+
+## Trace tab, big crew
+
+Where the time went: every model call, tool call and subagent of one prompt on a shared time axis. [52 columns](trace-big-52.png).
+
+![Trace tab](trace-big-120.png)
+
 ## Overview tab
 
 Budget bars, session stats, what is running. [52 columns](overview-52.png).
