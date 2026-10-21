@@ -1,6 +1,6 @@
 import { resolveTtl, parseTtl, subCache } from '../lib/model.js'
 import { expect, mock, test } from 'claude-code/testing'
-import { alerts, newState, onSpawn, onToolStart, onToolEnd, onStepStart, onStepEnd, onTurnStart, onTurnComplete, showPath, traceRoots, traceTree, snapshot, restore, MAX_SPANS } from '../lib/model.js'
+import { syncAgents, alerts, newState, onSpawn, onToolStart, onToolEnd, onStepStart, onStepEnd, onTurnStart, onTurnComplete, showPath, traceRoots, traceTree, snapshot, restore, MAX_SPANS } from '../lib/model.js'
 
 const BAND = { plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 3 }, view: {} } } as const
 const PANE = {
@@ -365,6 +365,17 @@ test('the trace nests model calls, tools and subagents under their prompt, timed
   expect([call.t0, call.t1, call.tok]).toEqual([1000, 4000, 51_210])
   expect(call.cost).toBeGreaterThan(0)
   expect(end['u:t1']).toBe(53_000) // the prompt's trace lasts until its subagent is done
+})
+
+test('a subagent whose end was never heard is closed from the agent list, with its unanswered last call', () => {
+  const S: any = newState()
+  onTurnStart(S, { turnId: 't1', text: 'go' }, 1000)
+  onToolStart(S, 'ag1', 'Agent', undefined, 2000, { description: 'build' })
+  onSpawn(S, 'x1', { tool_use_id: 'ag1', description: 'build', subagentType: 'builder', background: true }, 'claude-sonnet-5-5', 2000)
+  onToolStart(S, 'h1', 'SubagentHandback', 'x1', 9000, {})
+  S.agents.x1.lastAt = 9000
+  syncAgents(S, [{ id: 'x1', status: 'completed' }])
+  expect([S.spans['t:ag1'].st, S.spans['t:ag1'].t1, S.spans['t:h1'].st, S.spans['t:h1'].t1]).toEqual(['ok', 9000, 'ok', 9000])
 })
 
 test('a prompt sent once the subagents are done starts a new trace; the oldest traces go past the cap', () => {
