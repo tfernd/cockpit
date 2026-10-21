@@ -90,13 +90,12 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     const missing: string[] = []
-    for (const needle of [/context/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /turn 1/, /out/, /cached/]) {
+    for (const needle of [/context/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /last turn/, /3 tools/]) {
       if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
     }
     expect(missing).toEqual([])
     // subscription: no per-token bill, only a guess of what the usage is worth at API rates; the model is already in Claude's own footer
-    expect(await seen(ui, surface, /worth/)).toBeDefined()
-    expect(await seen(ui, surface, /≈\$1\.23/)).toBeDefined()
+    expect(await seen(ui, surface, /worth/)).toBeUndefined()
     expect(await seen(ui, surface, /month/)).toBeUndefined()
     expect(await seen(ui, surface, /opus 5\.5/)).toBeUndefined()
     await ui.unmount()
@@ -147,7 +146,7 @@ test('every pane tab draws a valid tree on both surfaces', async ($, on) => {
   }
 })
 
-test('the agents pill and tab count launched, running, finished and failed', async ($, on) => {
+test('the now pill and the Agents tab count launched, running, finished and failed', async ($, on) => {
   await boot($, on)
   const spawn = (d: string) =>
     ($ as any).agent.spawn({ tool_use_id: 'u' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false })
@@ -158,9 +157,7 @@ test('the agents pill and tab count launched, running, finished and failed', asy
   await $.turn.complete({ turnId: 'a2', agentId: 'ag2', reason: 'error', answer: '', durationMs: 900, isAborted: false, usage: null })
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await seen(band, surface, /1\/3/)).toBeDefined() // 1 of 3 finished
-        expect(await seen(band, surface, /1 failed/)).toBeDefined()
-    expect(await seen(band, surface, /agents/)).toBeDefined() // the crew pill, with one square per subagent
+    expect(await seen(band, surface, /1 agent/)).toBeDefined() // the now pill counts the one still running
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })
@@ -180,9 +177,7 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
   await step('claude-sonnet-5-5', 'high') // new model: nothing cached for it, so the whole prefix is written again
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await seen(band, surface, /model →/)).toBeDefined()
-    expect(await seen(band, surface, /sonnet 5\.5/)).toBeDefined()
-    expect(await seen(band, surface, /re-cached 93k/)).toBeDefined()
+    expect(await seen(band, surface, /model →/)).toBeUndefined() // switches live in the Cache tab, not the band
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-cache' })
@@ -191,7 +186,7 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
   }
 })
 
-test('subagents nest under the loop that spawned them, workers report steps, the plan pill ticks off', async ($, on) => {
+test('subagents nest under the loop that spawned them, workers report steps', async ($, on) => {
   await boot($, on)
   const spawn = (d: string, parentAgentId?: string) =>
     ($ as any).agent.spawn({ tool_use_id: 'x' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false, parentAgentId })
@@ -202,8 +197,7 @@ test('subagents nest under the loop that spawned them, workers report steps, the
   await $.turn.complete({ turnId: 'z', agentId: lead.agentId, reason: 'answer', answer: 'ok', durationMs: 1, isAborted: false, usage: null })
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await seen(band, surface, /plan/)).toBeDefined()
-    expect(await seen(band, surface, /1\/2/)).toBeDefined()
+    expect(await seen(band, surface, /1 agent/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })
@@ -262,7 +256,7 @@ test('120 parallel subagents: counted, summarised, and only the ones worth a loo
   for (const id of spawned.slice(0, 100)) await $.turn.complete({ turnId: 'f' + id, agentId: id, reason: id === spawned[3] ? 'error' : 'answer', answer: 'ok', durationMs: 1000, isAborted: false, usage: null })
   for (const surface of ['terminal', 'desktop'] as const) {
     const band = await $.ui.mount({ ...BAND, surface } as any)
-    expect(await seen(band, surface, /99\/120/)).toBeDefined()
+    expect(await seen(band, surface, /20 agents/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-agents' })
@@ -333,7 +327,7 @@ test('subagent caches count from the end of each one\'s last request', () => {
   expect(subCache(S, 700_000).warm).toBe(0)
 })
 
-test('the band counts tools running in parallel, how many are in subagents, and the peak', async ($, on) => {
+test('the now pill names the newest tool in flight and counts the others', async ($, on) => {
   await boot($, on)
   const open = (name: string, agentId?: string) => $.session.append({ agentId, message: { type: 'assistant', content: [{ type: 'tool_use', id: 'p' + name + (agentId ?? ''), name, input: {} }] } })
   await open('Bash')
@@ -341,7 +335,7 @@ test('the band counts tools running in parallel, how many are in subagents, and 
   await open('Grep', 'ag1')
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    for (const needle of [/running/, /1 in agents/]) expect(await seen(ui, surface, needle)).toBeDefined()
+    for (const needle of [/now/, /Grep/, /\+2 tools/]) expect(await seen(ui, surface, needle)).toBeDefined()
     await ui.unmount()
   }
 })
@@ -438,6 +432,11 @@ test('the Trace tab draws the waterfall on both surfaces; rows select, open and 
     expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
     await ui.press({ key: agentKey })
     expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeDefined()
+    // show failed only: the Bash stays, the subagent's Grep goes; back to all
+    await ui.press({ key: 'filter-failed' })
+    expect(await ui.find({ type: 'Text', text: /pnpm test checkout/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
+    await ui.press({ key: 'filter-all' })
     // page back to the first trace and forth again
     await ui.press({ key: 'trace-prev' })
     expect(await ui.find({ type: 'Text', text: /trace 1 of 2/ })).toBeDefined()

@@ -21,14 +21,15 @@ import {
   resolveTtl,
 } from '../lib/model.js'
 import { TABS } from '../lib/views.js'
-import { band, paneBody } from '../lib/pills.js'
+import { band, paneBody, pillSpecs } from '../lib/pills.js'
 
 const PANE = 'cockpit'
 let S = newState()
 let tab = 'trace'
 // Trace tab: which trace is shown (null = the latest), rows opened or closed by hand, the selected span.
-let view = { root: null, open: {}, sel: null }
+let view = { root: null, open: {}, sel: null, filter: null }
 let tickN = 0
+let shown = '' // what the band showed at the last redraw: the tick redraws only when it changes
 
 // Add this session's cost growth to the month's running total, kept in $.store so every session shares it.
 // The plan is read from the limits the account reports. A plan seen once is remembered, because the
@@ -127,7 +128,13 @@ async function tick($) {
   trackPeak(S)
   closeStale(S, now)
   for (const text of alerts(S, now)) $.ui.toast('cockpit: ' + text, { timeoutMs: 6000 })
-  $.ui.invalidate('ui.render')
+  // Redraw when the band would read differently, or while something runs (the Trace tab's bars grow).
+  const sig = JSON.stringify(pillSpecs(S, now))
+  const busy = Object.keys(S.running).length || S.curTurn || Object.values(S.agents).some((a) => a.status === 'running')
+  if (sig !== shown || busy) {
+    shown = sig
+    $.ui.invalidate('ui.render')
+  }
 }
 
 async function persist($) {
@@ -380,7 +387,11 @@ export function register(on) {
         redraw()
       },
       show: (rootId) => {
-        view = { root: rootId, open: {}, sel: null }
+        view = { ...view, root: rootId, open: {}, sel: null }
+        redraw()
+      },
+      setFilter: (f) => {
+        view = { ...view, filter: f === 'all' ? null : f }
         redraw()
       },
     }

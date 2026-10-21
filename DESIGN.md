@@ -1,6 +1,6 @@
 # DESIGN.md
 
-The plan for cockpit's next version: a trace waterfall ("where did the time go") in place of the stats tables, and a calmer band. The data it needs is in [SCHEMA.md](SCHEMA.md). Status: steps 1 to 3 built in 0.13.0 (span recorder, realistic seed, Trace tab); the band is next; folding the old tabs is not started.
+The plan for cockpit's next version: a trace waterfall ("where did the time go") in place of the stats tables, and a calmer band. The data it needs is in [SCHEMA.md](SCHEMA.md). Status: steps 1 to 3 built in 0.13.0 (span recorder, realistic seed, Trace tab), step 4 in 0.14.0 (band); folding the old tabs is not started.
 
 ## What is wrong now
 
