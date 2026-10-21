@@ -14,7 +14,7 @@ Who reads this: any agent working on this repo, and the owner. For what the plug
 | `lib/model.js` | State (`newState`) and pure mutators (`onToolStart`, `onStepEnd`, `onSpawn`, `alerts`, ...). No `$`, no I/O, so it is unit-testable. Also pricing (`PRICES`) and the toast rules in `alerts()`. |
 | `lib/views.js` | Pane tabs (`TABS`, `BODIES`) and formatting helpers, built from `Box` / `Text` passed in. |
 | `lib/pills.js` | `pillSpecs()` decides *what* pills to show (pure data); terminal renderer (colored Boxes); `band()` and `paneBody()`. |
-| `lib/svgband.js` | Desktop renderer: pills as one SVG, row balancing and justification, crew squares, `dotGridSvg`. |
+| `lib/svgband.js` | Desktop renderer: pills as one SVG in greedy rows (fixed order, no re-balancing), justified; `dotGridSvg`. |
 | `tests/cockpit.test.ts` | Tests using `claude-code/testing`. |
 | `Makefile` | Every command (below). `make` alone lists them. |
 | `.shots/` | The render pipeline behind `make render`. Dot-folder, so `claude plugin test .` skips it. |
@@ -51,7 +51,7 @@ Layout rules: tables use `minWidth` cells (never cut a number) plus one `flex` c
 - Add new state to `newState()` with a comment, and keep it JSON-serialisable: `snapshot()` / `restore()` persist it. Bump caps (`cap()`) on anything that grows.
 - Put logic in `model.js` or `pills.js` as pure functions; keep `register.js` thin.
 - Money (cost, month, budget) only shows when `S.account === 'api'`. Never show a bill on a subscription; cost there is an API-rate estimate.
-- Pills carry a priority (`pri`, higher drops first when space runs out). The crew pill uses `ownRow`.
+- Pills carry a priority (`pri`, higher drops first when space runs out) and a fixed place in `ORDER` (`lib/pills.js`), so none moves when another comes or goes. The 1 s tick redraws only when the band would read differently or something runs.
 - Text width in SVG is estimated (`textW`), there is no layout engine; check wide strings visually.
 - No aliases, no one-line wrappers, no code kept for old callers: change the callers and delete the old code. The one exception is reading state an older version saved (`load()` in `hooks/register.js`), with a comment naming that version.
 - Match surrounding style: no semicolons, single quotes, short comments that explain why.

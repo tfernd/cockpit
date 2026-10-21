@@ -5,7 +5,7 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 ## What you see
 
 **Band above the prompt**: pill badges justified edge to edge, spread evenly over the fewest rows they need (3-3-1 rather than 4-2-1; at most three rows on Desktop, two in the terminal, dropping the lowest-priority pills if they do not fit). On Desktop they are drawn as an SVG (rounded, tinted, icons, thin bars, light and dark theme); in the terminal as colored blocks.
-- context: how full, of what window size (the exact token count is on the Overview tab)
+- context: how full, of what window size (the exact token count is on the Usage tab)
 - *subscription*: 5-hour and weekly windows with reset times
 - *API / enterprise*: spend limit (when the account has one), **chat** cost, and **month** (spent so far → projected, against the budget you set). None of these show on a subscription.
 - *subscription*: a **worth** pill, a guess of what this chat's usage would cost at API rates (≈$ chat, ≈$ month), next to the fee you set with `/cockpit plan 100`
@@ -17,15 +17,14 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 - **tools pill** (only while tools run): how many run in parallel right now, how many of them are inside subagents, and the most seen at once
 - **crew pill** (only while subagents are running): done / total, one square per subagent in spawn order (blue running, grey done, red failed, amber stopped, hollow = planned and not started; brighter as its context fills), and failed / running counts. Crews over forty are grouped, each square showing the busiest state in its group.
 
-**`/cockpit` pane** (keys 1-8 switch tabs):
+**`/cockpit` pane** (keys 1-7 switch tabs):
 1. **Trace** (opens first): where the time went in one prompt. Each model call, tool call and subagent is a row with a bar on a shared time axis, `duration · cost` after it, nested under the subagent that ran it; failed spans are red, the slowest call is marked, running ones grow live. Press a row to see its detail (model, tokens, input, the error text or the subagent's answer); press a subagent again to open or close it. A turn its subagents wake while they still run stays in the same trace; ◀ ▶ page through earlier prompts.
-2. **Overview**: the same gauges as the pills, as bars with the detail a pill has no room for (tokens, reset times, cache hit rate, task, plan and agent progress, month against budget), then session counters (turns, tool calls, failures, re-reads, compactions), turn-time stats, tokens, money, model, workspace, and what is running now. The pills are not repeated here: they live above the prompt
+2. **Usage**: context, the 5-hour and weekly windows with reset times, task, plan and agent progress, money (API accounts) or worth (subscriptions), session counters and turn-time stats; then the prompt cache: main-window countdown, the subagent caches, read / wrote / new totals, every model or effort switch with the tokens it re-cached, and a stacked bar per request
 3. **Tools**: per tool calls, failures, mean, sd, p50, p95, p99, with a p95 bar (last 500 calls per tool)
 4. **Files**: reads, edits and repeated reads per file. Paths are relative to the workspace folder; a file outside it is shown in full with ↗
-5. **Cache**: main-window countdown, the **subagent caches** (how many are still warm, when the next cools),  read / wrote / new / output totals, every model or effort switch with the tokens it forced the cache to re-write, a stacked bar per request
-6. **Agents**: (Desktop: the square grid first) fleet bar with the most running at once, the plan's progress, **per-subagent statistics** (time, turns, tools, tokens, cost: mean, p50, p95, max), **by model** and **by type** tables, then the agents themselves. Up to 24 it is a full tree under the loop that spawned each, with step progress and the result handed back. Past that it lists only what needs a look (running, failed, the latest finished), one line each; `/cockpit all` lists everything. Loops that send events but were never announced (a workflow's agents, engine forks) are picked up from those events and marked *unlisted*.
-7. **Timeline**: spawns, subagent results, session messages, model changes, compactions
-8. **Debug**: which events the recorder has actually seen, and when. Start here if a panel is empty.
+5. **Agents**: (Desktop: the square grid first) fleet bar with the most running at once, the plan's progress, **per-subagent statistics** (time, turns, tools, tokens, cost: mean, p50, p95, max), **by model** and **by type** tables, then the agents themselves. Up to 24 it is a full tree under the loop that spawned each, with step progress and the result handed back. Past that it lists only what needs a look (running, failed, the latest finished), one line each; `/cockpit all` lists everything. Loops that send events but were never announced (a workflow's agents, engine forks) are picked up from those events and marked *unlisted*.
+6. **Timeline**: spawns, subagent results, session messages, model changes, compactions
+7. **Debug**: which events the recorder has actually seen, and when. Start here if a panel is empty.
 
 **Toasts** (each fires once; several of the same kind arrive as one): cache expiring in 30 s, context 80% / 90%, a tool running too long, a subagent quiet for over 2 minutes, the same file read 3 times with no edit. "Too long" is 90 s until a tool has 8 recorded calls, then `max(45 s, 3 × its p95)`. Note the `Agent` tool lasts as long as the whole subagent run, so it trips this on any subagent over 90 s ("Agent running 90s (slow for this tool)"); that is expected, not a fault.
 

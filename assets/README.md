@@ -26,17 +26,17 @@ Where the time went: every model call, tool call and subagent of one prompt on a
 
 ![Trace tab](trace-big-120.png)
 
-## Overview tab
+## Usage tab
 
-Budget bars, session stats, what is running. [52 columns](overview-52.png).
+Context, plan limits, money, session stats, and the prompt cache: window, hit rate, switches, each request. [52 columns](usage-52.png).
 
-![Overview tab](overview-120.png)
+![Usage tab](usage-120.png)
 
-## Overview tab, big crew
+## Usage tab, big crew
 
-Budget bars, session stats, what is running. [52 columns](overview-big-52.png).
+Context, plan limits, money, session stats, and the prompt cache: window, hit rate, switches, each request. [52 columns](usage-big-52.png).
 
-![Overview tab](overview-big-120.png)
+![Usage tab](usage-big-120.png)
 
 ## Tools tab
 
@@ -49,12 +49,6 @@ Calls, failures and durations per tool. [52 columns](tools-52.png).
 Reads, edits and re-reads per file. [52 columns](files-52.png).
 
 ![Files tab](files-120.png)
-
-## Cache tab
-
-Cache hit rate, lifetimes, switches that re-cached. [52 columns](cache-52.png).
-
-![Cache tab](cache-120.png)
 
 ## Agents tab
 

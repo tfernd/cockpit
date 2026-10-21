@@ -103,10 +103,9 @@ for (const [name, tree] of Object.entries(trees)) {
 const VIEWS = [
   ['band', 'Band above the prompt', 'The pills: gauges, what runs now, totals.'],
   ['trace', 'Trace tab', 'Where the time went: every model call, tool call and subagent of one prompt on a shared time axis.'],
-  ['overview', 'Overview tab', 'Budget bars, session stats, what is running.'],
+  ['usage', 'Usage tab', 'Context, plan limits, money, session stats, and the prompt cache: window, hit rate, switches, each request.'],
   ['tools', 'Tools tab', 'Calls, failures and durations per tool.'],
   ['files', 'Files tab', 'Reads, edits and re-reads per file.'],
-  ['cache', 'Cache tab', 'Cache hit rate, lifetimes, switches that re-cached.'],
   ['agents', 'Agents tab', 'Subagents: status, models, steps, plan.'],
   ['timeline', 'Timeline tab', 'Spawns, results, messages, model switches.'],
   ['debug', 'Debug tab', 'Which events the recorder has seen.'],

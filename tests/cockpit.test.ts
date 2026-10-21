@@ -20,7 +20,7 @@ async function seen(ui: any, surface: string, needle: RegExp) {
   return ui.find({ type: 'Text', text: needle })
 }
 
-const TABS = ['trace', 'overview', 'tools', 'files', 'cache', 'agents', 'timeline', 'debug']
+const TABS = ['trace', 'usage', 'tools', 'files', 'agents', 'timeline', 'debug']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
 async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; spend?: boolean } = {}) {
@@ -180,7 +180,7 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
     expect(await seen(band, surface, /model →/)).toBeUndefined() // switches live in the Cache tab, not the band
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    await ui.press({ key: 'tab-cache' })
+    await ui.press({ key: 'tab-usage' })
     expect(await ui.find({ type: 'Text', text: /re-cached 93k tokens/ })).toBeDefined()
     await ui.unmount()
   }
