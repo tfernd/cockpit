@@ -404,6 +404,7 @@ test('the Trace tab draws one lane per loop on both surfaces, with tooltips on D
   expect(svg.props.source).toContain('Bash: pnpm test checkout')
   expect(svg.props.source).toContain('failed: 2 of 14 checkout tests fail')
   expect(svg.props.source).toContain('Grep: coupon')
+  expect(svg.props.source).toMatch(/class="mark"[\s\S]*class="mark"/) // the prompt before stays on the axis as context: a mark for each
   await d.press({ key: 'trace-prev' })
   expect(await d.find({ type: 'Text', text: /^1 of 2$/ })).toBeDefined()
   await d.press({ key: 'trace-next' })
