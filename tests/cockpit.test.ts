@@ -399,7 +399,7 @@ test('the Trace tab draws one lane per loop on both surfaces, with tooltips on D
   expect(await d.find({ type: 'Text', text: /^fix the checkout$/ })).toBeDefined() // the paste's tags are gone from the title
   expect(await d.find({ type: 'Text', text: /Running · .* tokens/ })).toBeDefined()
   const svg = await d.find({ type: 'Svg' })
-  expect(svg.props.isInteractive).toBe(true)
+  expect(svg.props.isInteractive).toBe(false) // live: an image, so updates do not blink
   expect(svg.props.alt).toMatch(/Main session .*read the tests \(Explore/)
   expect(svg.props.source).toContain('Bash: pnpm test checkout')
   expect(svg.props.source).toContain('failed: 2 of 14 checkout tests fail')
