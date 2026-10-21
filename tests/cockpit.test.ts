@@ -200,7 +200,7 @@ test('subagents get a lane under the loop that spawned them, with their step pro
     expect(await seen(band, surface, /1 agent/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.alt).toMatch(/lead task \(Explore.*step 2\/5\), child task/)
+    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.alt).toMatch(/lead task \(haiku · step 2\/5 · Explore\), child task/)
     else expect(await ui.find({ type: 'Text', text: /^ {4}child task$/ })).toBeDefined() // two levels in: under lead task
     await ui.unmount()
   }
@@ -400,7 +400,7 @@ test('the Trace tab draws one lane per loop on both surfaces, with tooltips on D
   expect(await d.find({ type: 'Text', text: /Running · .* tokens/ })).toBeDefined()
   const svg = await d.find({ type: 'Svg' })
   expect(svg.props.isInteractive).toBe(false) // live: an image, so updates do not blink
-  expect(svg.props.alt).toMatch(/Main session .*read the tests \(Explore/)
+  expect(svg.props.alt).toMatch(/Main session .*read the tests \(haiku · Explore/)
   expect(svg.props.source).toContain('Bash: pnpm test checkout')
   expect(svg.props.source).toContain('failed: 2 of 14 checkout tests fail')
   expect(svg.props.source).toContain('Grep: coupon')
