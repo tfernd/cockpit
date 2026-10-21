@@ -54,9 +54,9 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 
 Installed from this folder through a local marketplace (`claude plugin install cockpit@tfernandes-mods`). Claude Code installs a copy under `~/.claude/plugins/cache/`, keyed by the `version` in `.claude-plugin/plugin.json`, so bump the version (one commit per version, `cockpit X.Y.Z: what changed`) for the installed copy to pick up an edit; `--plugin-dir` always uses the working tree. See [AGENTS.md](AGENTS.md) for the code layout.
 
-## Screenshots
+## Gallery
 
-PNGs of every tab at a narrow (64 columns) and a wide (120 columns) pane are in [docs/screenshots](docs/screenshots). They are made by `.shots/run.sh` from a seeded session: the pane's element tree drawn as flexbox HTML in headless Chrome, so they show the layout, not a capture of the Desktop app itself.
+Every view (the band and each tab) at a narrow (52 columns) and a wide (120 columns) pane is in [assets/README.md](assets/README.md). `make render` draws them from a seeded session: the pane's element tree laid out as flexbox HTML in headless Chrome, so they show the layout, not a capture of the Desktop app itself.
 
 ## Known limits
 

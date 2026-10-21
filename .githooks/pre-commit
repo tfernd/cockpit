@@ -1,0 +1,7 @@
+#!/bin/sh
+# Fast checks only; `make check` (validate + tests) is still run by hand before committing.
+if git diff --cached --name-only | grep -q '^\.render/'; then
+  echo "pre-commit: .render/ is scratch output of make render; commit assets/ instead (L-002)" >&2
+  exit 1
+fi
+exec node scripts/check-docs.mjs

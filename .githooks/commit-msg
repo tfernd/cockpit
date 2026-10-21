@@ -1,0 +1,6 @@
+#!/bin/sh
+# The owner wants no AI attribution in commits; history was rewritten once to remove it (AGENTS.md, L-001).
+if grep -qiE '^co-authored-by:|generated with \[?claude' "$1"; then
+  echo "commit-msg: remove the Co-Authored-By / 'Generated with' line (AGENTS.md, Workflow step 4)" >&2
+  exit 1
+fi

@@ -1,7 +1,7 @@
 import { mock, test } from 'claude-code/testing'
 
-// Not a real test: with COCKPIT_SHOTS_DIR set it seeds a busy session and dumps the tree of every tab
-// (and the band) as JSON, for tools/shots.mjs to turn into PNGs. Without it, it does nothing.
+// Not a real test: it seeds a busy session and prints the tree of every tab (and the band) as JSON, for
+// .shots/render.mjs to turn into PNGs. Only `make render` runs it (it copies this file into a scratch plugin).
 const OUT = true
 
 const PANE = (columns: number) =>

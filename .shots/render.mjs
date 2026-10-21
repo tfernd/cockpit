@@ -1,11 +1,13 @@
-// Draws cockpit's element trees (trees.json, from shots.test.ts) as HTML flexbox and screenshots them with headless Chrome.
+// Draws cockpit's element trees (trees.json, from shots.test.ts) as HTML flexbox and screenshots them with headless Chrome,
+// then writes the gallery page (README.md) beside the PNGs.
 // This is an approximation of how the Desktop app lays the same tree out (Box -> flex div, 1 column = 8px), not a capture of the real app.
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs'
+// usage: node .shots/render.mjs <scratch-dir with trees.json> <png-dir>
+import { readFileSync, writeFileSync, mkdirSync, readdirSync } from 'node:fs'
 import { execFileSync } from 'node:child_process'
 import { join } from 'node:path'
 
-const out = process.argv[2]
-const trees = JSON.parse(readFileSync(join(out, 'trees.json'), 'utf8'))
+const [build, out] = process.argv.slice(2)
+const trees = JSON.parse(readFileSync(join(build, 'trees.json'), 'utf8'))
 const CELL = 8
 const ROW = 19
 
@@ -78,18 +80,42 @@ body{margin:0;background:#e9ebef;font:13px/${ROW}px ui-sans-serif,system-ui,-app
 `
 const FONT_WIDTH = (cols) => cols * CELL + 32 + 28
 
-mkdirSync(join(out, 'html'), { recursive: true })
+mkdirSync(join(build, 'html'), { recursive: true })
+mkdirSync(out, { recursive: true })
 const chrome = process.env.CHROME || 'google-chrome'
+const drawn = new Set()
 for (const [name, tree] of Object.entries(trees)) {
   const cols = Number(name.split('-').pop())
   const isBand = name.startsWith('band')
   const w = isBand ? cols * CELL + 80 : FONT_WIDTH(cols)
   const page = `<!doctype html><meta charset="utf-8"><style>${CSS}</style><body><div class="card" id="c">${isBand ? '' : '<div class="title"><span>Cockpit</span><span>⤢ &nbsp;✕</span></div>'}${html(tree)}</div><script>document.title=document.getElementById('c').getBoundingClientRect().height+28</script>`
-  const file = join(out, 'html', name + '.html')
+  const file = join(build, 'html', name + '.html')
   writeFileSync(file, page)
   const args = ['--headless=new', '--no-sandbox', '--hide-scrollbars', '--force-device-scale-factor=2']
-  const dom = execFileSync(chrome, [...args, '--dump-dom', `--window-size=${w},900`, 'file://' + file], { encoding: 'utf8' })
+  const dom = execFileSync(chrome, [...args, '--dump-dom', `--window-size=${w},900`, 'file://' + file], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }) // Chrome's GPU warnings are noise
   const h = Math.ceil(Number(/<title>([\d.]+)<\/title>/.exec(dom)?.[1] || 600))
   execFileSync(chrome, [...args, `--screenshot=${join(out, name + '.png')}`, `--window-size=${w},${h}`, 'file://' + file], { stdio: 'ignore' })
+  drawn.add(name + '.png')
   console.log(name + '.png', w + 'x' + h)
 }
+
+// The gallery: one section per view, the wide shot shown and the narrow one linked.
+const VIEWS = [
+  ['band', 'Band above the prompt', 'The pills: gauges, what runs now, totals.'],
+  ['overview', 'Overview tab', 'Budget bars, session stats, what is running.'],
+  ['tools', 'Tools tab', 'Calls, failures and durations per tool.'],
+  ['files', 'Files tab', 'Reads, edits and re-reads per file.'],
+  ['cache', 'Cache tab', 'Cache hit rate, lifetimes, switches that re-cached.'],
+  ['agents', 'Agents tab', 'Subagents: status, models, steps, plan.'],
+  ['timeline', 'Timeline tab', 'Spawns, results, messages, model switches.'],
+  ['debug', 'Debug tab', 'Which events the recorder has seen.'],
+]
+const md = ['# Gallery', '', 'Every view of the cockpit, drawn by `make render` from a seeded session (`.shots/shots.test.ts`). The pane\'s element tree is laid out as flexbox HTML in headless Chrome (1 column = 8 px), so this shows the layout, not a capture of the Desktop app. Each view is shown 120 columns wide; the 52-column version is linked. `big` is the same session with about 110 more subagents.', '']
+for (const [id, title, what] of VIEWS) {
+  for (const v of [id, id + '-big']) {
+    if (!drawn.has(v + '-120.png')) continue
+    md.push(`## ${title}${v.endsWith('-big') ? ', big crew' : ''}`, '', what + ` [52 columns](${v}-52.png).`, '', `![${title}](${v}-120.png)`, '')
+  }
+}
+writeFileSync(join(out, 'README.md'), md.join('\n'))
+for (const f of readdirSync(out)) if (f.endsWith('.png') && !drawn.has(f)) console.log('stale: ' + join(out, f) + ' (no longer rendered)')
