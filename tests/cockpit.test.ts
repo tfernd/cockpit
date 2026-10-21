@@ -1,7 +1,9 @@
 import { resolveTtl, parseTtl, subCache } from '../lib/model.js'
 import { expect, mock, test } from 'claude-code/testing'
-import { syncAgents, alerts, newState, onSpawn, onToolStart, onToolEnd, onStepStart, onStepEnd, onTurnStart, onTurnComplete, showPath, traceRoots, traceTree, snapshot, restore, MAX_SPANS } from '../lib/model.js'
+import { syncAgents, recordSpend, spendPace, alerts, newState, onSpawn, onToolStart, onToolEnd, onStepStart, onStepEnd, onTurnStart, onTurnComplete, showPath, traceRoots, traceTree, snapshot, restore, MAX_SPANS } from '../lib/model.js'
 
+// The mocked clock's start: reset times are built from it, as the engine's are from the real clock.
+const T0 = 1_700_000_000_000
 const BAND = { plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: 120, scroll: { offset: 0, bodyRows: 3 }, view: {} } } as const
 const PANE = {
   plugin: 'cockpit',
@@ -20,11 +22,11 @@ async function seen(ui: any, surface: string, needle: RegExp) {
   return ui.find({ type: 'Text', text: needle })
 }
 
-const TABS = ['trace', 'usage', 'files', 'debug']
+const TABS = ['trace', 'usage']
 
 // Stubs for everything Claude Code would answer, then drive one turn through the mod's hooks.
 async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; spend?: boolean } = {}) {
-  mock.clock(on, { now: 1_700_000_000_000 })
+  mock.clock(on, { now: T0 })
   const saved = new Map<string, unknown>()
   if (opts.budget) saved.set('budget', opts.budget)
   if (opts.spend) saved.set('spend', { month: new Date().toISOString().slice(0, 7), usd: 142, since: Date.now() - 3 * 86_400_000 })
@@ -42,8 +44,8 @@ async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; sp
       startedAt: 0,
       context: { tokens: 280_000, window: 1_000_000, percent: 28, ...(e && e.breakdown ? { breakdown: { isAutoCompactEnabled: true, autoCompactThreshold: 920_000 } } : {}) },
       rateLimits: opts.limits ?? [
-        { kind: 'five_hour', percentUsed: 22, resetsAt: new Date(Date.now() + 9_000_000).toISOString() },
-        { kind: 'seven_day', percentUsed: 58, resetsAt: new Date(Date.now() + 90_000_000).toISOString() },
+        { kind: 'five_hour', percentUsed: 22, resetsAt: new Date(T0 + 9_000_000).toISOString() },
+        { kind: 'seven_day', percentUsed: 58, resetsAt: new Date(T0 + 90_000_000).toISOString() },
       ],
       cost: { usd: 1.23 },
     },
@@ -116,11 +118,11 @@ test('on Desktop the band is one SVG as wide as its slot; narrow, its tiles wrap
   await wide.unmount()
 })
 
-test('an enterprise / gateway account shows chat cost, the month with its projection, and the limit', async ($, on) => {
-  await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200, spend: true })
+test('an enterprise / gateway account shows its budget in dollars with the pace, and this chat with what the cache saved', async ($, on) => {
+  await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(T0 + 864_000_000).toISOString() }], budget: 200, spend: true })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    for (const needle of [/spend/i, /42%/, /cost/i, /1\.23/, /this month/, /\$142/, /→ ~\$/, /of \$200/]) {
+    for (const needle of [/budget · 10d left/i, /\$84/, /of \$200 · on pace for \$1[23]\d/, /this chat/i, /1\.23/, /cache saved/]) {
       expect(await seen(ui, surface, needle)).toBeDefined()
     }
     expect(await seen(ui, surface, /5-hour/i)).toBeUndefined() // no 5-hour window on a gateway account
@@ -137,10 +139,14 @@ test('every pane tab draws a valid tree on both surfaces', async ($, on) => {
       expect(await ui.find({ key: 'tab-' + id })).toBeDefined()
     }
     await ui.press({ key: 'tab-usage' })
-    expect(await ui.find({ type: 'Text', text: 'Tools this session' })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: 'Read' })).toBeDefined()
-    await ui.press({ key: 'tab-debug' })
-    expect(await ui.find({ type: 'Text', text: 'tool.call' })).toBeDefined()
+    // Desktop draws Usage as one SVG image (its alt says it in words); the terminal as Text
+    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.alt).toMatch(/Tools: Read/)
+    else {
+      expect(await ui.find({ type: 'Text', text: 'TOOLS' })).toBeDefined()
+      expect(await ui.find({ type: 'Text', text: 'Read' })).toBeDefined()
+    }
+    expect(await ui.find({ key: 'tab-files' })).toBeUndefined()
+    expect(await ui.find({ key: 'tab-debug' })).toBeUndefined()
     await ui.unmount()
   }
 })
@@ -179,7 +185,8 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
     await ui.press({ key: 'tab-usage' })
-    expect(await ui.find({ type: 'Text', text: /re-cached 93k tokens/ })).toBeDefined()
+    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.source).toContain('re-cached 93k')
+    else expect(await ui.find({ type: 'Text', text: /re-cached 93k/ })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -247,21 +254,12 @@ test('120 parallel subagents: counted, summarised, and only the ones worth a loo
   }
 })
 
-test('files inside the workspace show relative, files outside show in full with a marker', async ($, on) => {
-  await boot($, on)
-  await runTool($, 'Read', { file_path: '/work/src/deep/m.ts' })
-  const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
-  await ui.press({ key: 'tab-files' })
-  expect(await ui.find({ type: 'Text', text: 'src/deep/m.ts' })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: '↗ /a/x.ts' })).toBeDefined()
-  await ui.unmount()
-})
-
 test('a pinned account type shows API money even when the account reports no limits', async ($, on) => {
   await boot($, on, { limits: [], budget: 200, spend: true })
   await $.command.run({ command: 'cockpit', args: 'account api' } as any)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
-  expect(await seen(ui, 'terminal', /COST/)).toBeDefined()
+  expect(await seen(ui, 'terminal', /THIS CHAT/)).toBeDefined()
+  expect(await seen(ui, 'terminal', /\$142 this month/)).toBeDefined() // no spend limit: cockpit's own tally of the month
   await ui.unmount()
 })
 
@@ -365,6 +363,20 @@ test('the trace nests model calls, tools and subagents under their prompt, timed
   expect(end['u:t1']).toBe(53_000) // the prompt's trace lasts until its subagent is done
 })
 
+test('the spend history keeps a reading when it moves or an hour passes, and starts over with a new period', () => {
+  const l = (p: number, r = '2026-11-01T00:00:00Z') => ({ kind: 'spend_limit', percentUsed: p, resetsAt: r })
+  let h: any = recordSpend(null, l(10), 1000)
+  expect(h.points).toEqual([[1000, 10]])
+  expect(recordSpend(h, l(10.05), 2000)).toBeNull() // under 0.1 point, under an hour: nothing new
+  h = recordSpend(h, l(10.5), 3000)
+  expect(h.points.length).toBe(2)
+  expect(recordSpend(h, l(10.5), 3000 + 3_600_001).points.length).toBe(3) // an hour later the same reading is kept
+  expect(recordSpend(h, l(0.2, '2026-12-01T00:00:00Z'), 4000).points).toEqual([[4000, 0.2]]) // new period
+  const half = Date.parse('2026-10-16T12:00:00Z')
+  const pace = spendPace(l(40), half)
+  expect([Math.round(pace.frac * 100), Math.round(pace.proj)]).toEqual([50, 80])
+})
+
 test('a subagent whose end was never heard is closed from the agent list, with its unanswered last call', () => {
   const S: any = newState()
   onTurnStart(S, { turnId: 't1', text: 'go' }, 1000)
@@ -374,6 +386,15 @@ test('a subagent whose end was never heard is closed from the agent list, with i
   S.agents.x1.lastAt = 9000
   syncAgents(S, [{ id: 'x1', status: 'completed' }])
   expect([S.spans['t:ag1'].st, S.spans['t:ag1'].t1, S.spans['t:h1'].st, S.spans['t:h1'].t1]).toEqual(['ok', 9000, 'ok', 9000])
+})
+
+test('a turn woken by the hand-back of the last subagent stays in its trace, so the finished subagents stay drawn', () => {
+  const S = seedTrace() // x1 finished at 53 s
+  onTurnStart(S, { turnId: 't3', text: '<agent-message from="x1">[Subagent hand-back] done</agent-message>' }, 54_000)
+  expect(traceRoots(S).map((r: any) => r.n)).toEqual(['ship the pricing page'])
+  expect(S.spans['u:t3'].p).toBe('u:t1')
+  onTurnStart(S, { turnId: 't4', text: '' }, 60_000) // an untyped continuation, too
+  expect(traceRoots(S).length).toBe(1)
 })
 
 test('a prompt sent once the subagents are done starts a new trace; the oldest traces go past the cap', () => {

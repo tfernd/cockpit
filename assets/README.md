@@ -4,15 +4,21 @@ Every view of the cockpit, drawn by `make render` from a seeded session (`.shots
 
 ## Band above the prompt
 
-The pills: gauges, what runs now, totals. [52 columns](band-52.png).
+Tiles: context with its auto-compact mark, cache, the 5-hour and weekly limits, work. [52 columns](band-52.png).
 
 ![Band above the prompt](band-120.png)
 
 ## Band above the prompt, big crew
 
-The pills: gauges, what runs now, totals. [52 columns](band-big-52.png).
+Tiles: context with its auto-compact mark, cache, the 5-hour and weekly limits, work. [52 columns](band-big-52.png).
 
 ![Band above the prompt](band-big-120.png)
+
+## Band on an enterprise account
+
+A spend limit instead of plan windows: the budget in dollars with the even-pace tick and the projection, and this chat. [52 columns](band-enterprise-52.png).
+
+![Band on an enterprise account](band-enterprise-120.png)
 
 ## Trace tab
 
@@ -38,14 +44,8 @@ Context, plan limits, money, session stats, and the prompt cache: window, hit ra
 
 ![Usage tab](usage-big-120.png)
 
-## Files tab
+## Usage tab on an enterprise account
 
-Reads, edits and re-reads per file. [52 columns](files-52.png).
+The budget card: the month as a burn-down (what was spent, the even pace, the limit, where the month ends at this pace). [52 columns](usage-enterprise-52.png).
 
-![Files tab](files-120.png)
-
-## Debug tab
-
-Which events the recorder has seen. [52 columns](debug-52.png).
-
-![Debug tab](debug-120.png)
+![Usage tab on an enterprise account](usage-enterprise-120.png)

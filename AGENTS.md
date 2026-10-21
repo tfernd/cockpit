@@ -14,6 +14,7 @@ Who reads this: any agent working on this repo, and the owner. For what the plug
 | `lib/model.js` | State (`newState`) and pure mutators (`onToolStart`, `onStepEnd`, `onSpawn`, `alerts`, ...). No `$`, no I/O, so it is unit-testable. Also pricing (`PRICES`) and the toast rules in `alerts()`. |
 | `lib/views.js` | Pane tabs (`TABS`, `BODIES`) and formatting helpers, built from `Box` / `Text` passed in. |
 | `lib/lanes.js` | The Trace tab's swimlanes: `lanesOf()` (one lane per loop, pure data), `lanesSvg()` (Desktop), `laneCells()` (terminal). |
+| `lib/usage.js` | The Usage tab: `usageSvg()` (Desktop: panels in one SVG, the budget burn-down among them), terminal sections; `usageTab()`. Imports `lib/views.js`, which imports it back: keep only functions at its top level. |
 | `lib/band.js` | The band above the prompt: `bandTiles()` (pure data: context with its compaction mark, cache, plan limits, money on API accounts, work), `bandSvg()` (Desktop), terminal Boxes; `band()`. |
 | `tests/cockpit.test.ts` | Tests using `claude-code/testing`. |
 | `Makefile` | Every command (below). `make` alone lists them. |
@@ -39,7 +40,7 @@ claude --plugin-dir .    # a session with the working tree loaded, hot reloads o
 
 ### Rendering
 
-After any layout change, run `make render` and look at the PNGs in `assets/`. It copies the plugin to a temp dir, runs `.shots/shots.test.ts` (a seeded busy session, mounts every tab at 52 and 120 columns on the desktop surface, prints the trees), then `.shots/render.mjs` draws them as flexbox HTML in headless Chrome (`google-chrome`, override with `CHROME=`) and writes `assets/README.md`. Read the 52-column ones especially: nothing cut off or misaligned. They approximate the Desktop layout (1 column = 8 px); they are not a capture of the app. Commit `assets/` with the change; a `stale:` line means a view is gone and its PNG should be removed with `git rm`. A new view gets a row in `VIEWS` in `.shots/render.mjs`.
+After any layout change, run `make render` and look at the PNGs in `assets/`. It copies the plugin to a temp dir, runs `.shots/shots.test.ts` (a seeded busy session, mounts every tab at 52 and 120 columns on the desktop surface, prints the trees), then `.shots/render.mjs` draws them as flexbox HTML (each Svg as an image, as the app does) in headless Chrome (`google-chrome`, override with `CHROME=`) and writes `assets/README.md`. Read the 52-column ones especially: nothing cut off or misaligned. They approximate the Desktop layout (1 column = 8 px); they are not a capture of the app. Commit `assets/` with the change; a `stale:` line means a view is gone and its PNG should be removed with `git rm`. A new view gets a row in `VIEWS` in `.shots/render.mjs`.
 
 Seed scale: the script also spawns about 110 agents (some failed, some running, some unlisted) for the `*-big-*` shots; the harness times out at 5 s, so keep per-agent work small.
 
@@ -49,7 +50,7 @@ Layout rules: tables use `minWidth` cells (never cut a number) plus one `flex` c
 
 - Every visible feature must work on both surfaces (`terminal` and `desktop`); the tests loop over both. Desktop gets SVG, terminal gets Boxes, both from the same data (`bandTiles`, `lanesOf`).
 - Add new state to `newState()` with a comment, and keep it JSON-serialisable: `snapshot()` / `restore()` persist it. Bump caps (`cap()`) on anything that grows.
-- Put logic in `model.js` or `pills.js` as pure functions; keep `register.js` thin.
+- Put logic in `model.js` or the view modules as pure functions; keep `register.js` thin.
 - Money (cost, month, budget) only shows when `S.account === 'api'`. Never show a bill on a subscription; cost there is an API-rate estimate.
 - The band's tiles come in a fixed order and wrap into rows; no text in them changes every second (the 1 s tick redraws only when the band would read differently, or every 5 s while something runs), since on Desktop each redraw swaps the whole image.
 - Text width in SVG is estimated, there is no layout engine: never place text after other text by an estimate, give it its own line or column; check wide strings visually.
@@ -85,6 +86,7 @@ When something goes wrong (a broken file, a doc that was wrong, a claim nobody r
 
 - L-001: AI attribution trailers reached commits although this file forbade them, and history was rewritten once. Now `.githooks/commit-msg` rejects them.
 - L-002: `docs/screenshots` kept render scratch (HTML pages, `trees.json`) in git. Now `make render` puts scratch in `.render/` (ignored) and only PNGs and the gallery in `assets/`; `pre-commit` rejects `.render/`.
+- L-004: the gallery pasted SVGs inline, so a panel's `.card` style faded the whole Usage render while the app (which draws SVGs as images) was fine. Now `.shots/render.mjs` embeds every Svg as an image.
 - L-003: the docs said the narrow shots were 64 columns (they are 52), and README linked a folder that was gone. Now `make docs` checks every path the docs name.
 
 ## Known gotchas

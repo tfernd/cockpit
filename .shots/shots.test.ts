@@ -13,9 +13,11 @@ const PANE = (columns: number) =>
     props: { title: 'Cockpit', isFocused: true, bodyColumns: columns - 4, placement: 'inline', scroll: { offset: 0, bodyRows: 40 }, view: {} },
   }) as const
 const BAND = (columns: number) => ({ plugin: 'cockpit', component: 'AbovePrompt', props: { hasSurvey: false, isWorking: false, maxRows: 10, bodyColumns: columns, scroll: { offset: 0, bodyRows: 3 }, view: {} } }) as const
-const TABS = ['trace', 'usage', 'files', 'debug']
+const TABS = ['trace', 'usage']
 
 // A tool call as the session records it: the model's tool_use, `ms` of work on the mocked clock, then the tool_result.
+// The mocked clock's start: reset times are built from it, as the engine's are from the real clock.
+const T0 = 1_700_000_000_000
 let clock: any
 let crew = false
 async function runTool($: any, tool: string, input: Record<string, unknown> = {}, agentId?: string, isError = false, ms = 200, out = 'ok') {
@@ -27,7 +29,7 @@ async function runTool($: any, tool: string, input: Record<string, unknown> = {}
 
 test('dump trees for screenshots', async ($: any, on: any) => {
   if (!OUT) return
-  clock = mock.clock(on, { now: 1_700_000_000_000 })
+  clock = mock.clock(on, { now: T0 })
   const saved = new Map<string, unknown>([['budget', 200]])
   on('store.get', (_: any, e: any) => ({ value: saved.get(e.key) }))
   on('store.set', (_: any, e: any) => (saved.set(e.key, e.value), { value: undefined }))
@@ -35,14 +37,16 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   on('agent.list', () => ({ value: [] }))
   on('command.register', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
+  // A subscription first (5-hour and weekly windows); the enterprise shots at the end swap in a spend limit.
+  let rateLimits: any[] = [
+    { kind: 'five_hour', percentUsed: 72, resetsAt: new Date(T0 + 9_000_000).toISOString() },
+    { kind: 'seven_day', percentUsed: 41, resetsAt: new Date(T0 + 250_000_000).toISOString() },
+  ]
   on('session.usage', () => ({
     value: {
       startedAt: 0,
       context: { tokens: 612_000, window: 1_000_000, percent: 61, breakdown: { isAutoCompactEnabled: true, autoCompactThreshold: 920_000 } },
-      rateLimits: [
-        { kind: 'five_hour', percentUsed: 72, resetsAt: new Date(Date.now() + 9_000_000).toISOString() },
-        { kind: 'seven_day', percentUsed: 41, resetsAt: new Date(Date.now() + 250_000_000).toISOString() },
-      ],
+      rateLimits,
       cost: { usd: 7.42 },
     },
   }))
@@ -176,6 +180,29 @@ test('dump trees for screenshots', async ($: any, on: any) => {
     const band = await $.ui.mount({ ...BAND(columns), surface: 'desktop' } as any)
     dump[`band-big-${columns}`] = await band.drawn()
     await band.unmount()
+  }
+  // Enterprise: a $250 monthly spend limit at 59%, 17 days before it resets (day 14 of 31), so the month runs ahead of pace.
+  const resetsAt = new Date(T0 + 17 * 86_400_000).toISOString() // the seed's clock has moved only minutes past T0
+  rateLimits = [{ kind: 'spend_limit', percentUsed: 59, resetsAt }]
+  saved.set('budget', 250)
+  // Two weeks of readings that earlier chats recorded: busy weekdays, quiet weekends, climbing to 57%.
+  const start = Date.parse(resetsAt) - 30 * 86_400_000
+  const points: [number, number][] = []
+  for (let h = 12, p = 0; start + h * 3_600_000 < T0 - 3_600_000; h += 6) {
+    const weekday = new Date(start + h * 3_600_000).getUTCDay() % 6 !== 0
+    p += weekday ? 0.9 + ((h * 7) % 5) * 0.12 : 0.15
+    points.push([start + h * 3_600_000, Math.min(57, Math.round(p * 10) / 10)])
+  }
+  saved.set('spendHist', { resetsAt, points })
+  await clock.advance(6000) // the tick reads usage every 5 s
+  for (const columns of [52, 120]) {
+    const band = await $.ui.mount({ ...BAND(columns), surface: 'desktop' } as any)
+    dump[`band-enterprise-${columns}`] = await band.drawn()
+    await band.unmount()
+    const ui = await $.ui.mount({ ...PANE(columns), surface: 'desktop' } as any)
+    await ui.press({ key: 'tab-usage' })
+    dump[`usage-enterprise-${columns}`] = await ui.drawn()
+    await ui.unmount()
   }
   console.log('@@TREES@@' + JSON.stringify(dump) + '@@END@@')
 })

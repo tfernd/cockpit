@@ -9,7 +9,7 @@ import {
   onTurnComplete,
   onSpawn,
   syncAgents,
-  count,
+  recordSpend,
   onStep,
   onPlan,
   alerts,
@@ -79,6 +79,14 @@ async function refresh($) {
   }
   await trackSpend($)
   syncAgents(S, await $.agent.list())
+  // The spend limit's readings over the month, for the Usage tab's burn-down; kept in $.store, so every chat adds to one history.
+  const sl = S.limits.find((l) => l.kind === 'spend_limit')
+  if (sl) {
+    const prev = S.spendHist || (await $.store.get('spendHist')) || null
+    const next = recordSpend(prev, sl, await $.clock.now())
+    if (next) await $.store.set('spendHist', next)
+    S.spendHist = next || prev
+  }
 }
 
 // Which cache lifetime Claude Code is really using, read from its settings and environment (the literal names are listed
@@ -184,7 +192,6 @@ export function register(on) {
   on('session.start', async ($, e, next) => {
     await load($)
     if (e.cwd) S.cwd = e.cwd
-    count(S, 'session.start', await $.clock.now())
     try {
       await refresh($) // show context and plan limits straight away, before any turn
       await refreshTtl($)
@@ -218,7 +225,7 @@ export function register(on) {
     try {
       await $.command.register({
         name: 'cockpit',
-        description: 'Open the cockpit pane (context, cache, tools, files, agents)',
+        description: 'Open the cockpit pane (context, cache, tools, agents)',
         argumentHint: '[tab | ttl 5|60|auto | budget 200 | plan 100 | account api|subscription|auto | reset]',
         immediate: true,
       })
@@ -261,7 +268,7 @@ export function register(on) {
       if (!(v >= 0)) return { text: 'usage: /cockpit budget 200   (monthly USD)  or  /cockpit budget off' }
       await $.store.set('budget', v)
       S.budgetUsd = v
-      return { text: v ? 'monthly budget set to $' + v + ' (counts API-rate cost of sessions run with cockpit loaded)' : 'monthly budget cleared' }
+      return { text: v ? 'monthly budget set to $' + v + ' (with a spend limit, its % reads as dollars of this; without one, the API-rate cost of chats run with cockpit loaded counts against it)' : 'monthly budget cleared' }
     }
     if (a[0] === 'plan') {
       const v = a[1] === 'off' ? 0 : Number(a[1])
@@ -297,7 +304,6 @@ export function register(on) {
     for (const b of e.message.content || []) {
       if (b.type === 'tool_use') {
         onToolStart(S, b.id, b.name, e.agentId, t, b.input)
-        count(S, 'tool.call', t)
         seen = true
       } else if (b.type === 'tool_result') {
         const text = typeof b.content === 'string' ? b.content : (b.content || []).map((c) => c.text || '').join(' ')
@@ -316,7 +322,6 @@ export function register(on) {
     const result = yield* next(e)
     const t1 = await $.clock.now()
     onStepEnd(S, e, result, t1)
-    count(S, e.agentId ? 'turn.step (agent)' : 'turn.step', t1)
     $.ui.invalidate('ui.render')
     return result
   })
@@ -325,7 +330,6 @@ export function register(on) {
   on('turn.start', async ($, e, next) => {
     const t = await $.clock.now()
     onTurnStart(S, e, t)
-    count(S, 'turn.start', t)
     return next(e)
   })
 
@@ -333,7 +337,6 @@ export function register(on) {
     const r = await next(e)
     const t = await $.clock.now()
     onTurnComplete(S, e, t)
-    count(S, e.agentId ? 'turn.complete (agent)' : 'turn.complete', t)
     $.ui.invalidate('ui.render')
     return r
   })
@@ -343,7 +346,6 @@ export function register(on) {
     const r = await next(e)
     const t = await $.clock.now()
     if (r && r.agentId) onSpawn(S, r.agentId, e, r.model, t)
-    count(S, 'agent.spawn', t)
     return r
   })
 
@@ -356,7 +358,6 @@ export function register(on) {
     S.ctx = e.context
     S.limits = e.rateLimits || []
     S.cost = e.cost || null
-    count(S, 'session.measure', await $.clock.now())
     $.ui.invalidate('ui.render')
     return next(e)
   })

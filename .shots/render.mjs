@@ -66,7 +66,8 @@ function html(el) {
     const key = p.hotkey ? `<span class="hk">${esc(p.hotkey)}</span>` : ''
     return `<span class="btn" style="${p.dimColor ? 'opacity:.6' : 'font-weight:600'}">${key}${esc(p.label)}</span>`
   }
-  if (type === 'Svg') return `<div style="width:${p.width}px;height:${p.height}px;flex-shrink:0;max-width:100%">${p.source}</div>`
+  // As an image, as the app draws it: inline, an SVG's <style> would leak into the page (and the page's into it).
+  if (type === 'Svg') return `<img alt="" style="width:${p.width}px;height:${p.height}px;flex-shrink:0;max-width:100%" src="data:image/svg+xml;base64,${Buffer.from(p.source).toString('base64')}">`
   return `<div>[${esc(type)}]</div>`
 }
 
@@ -101,11 +102,11 @@ for (const [name, tree] of Object.entries(trees)) {
 
 // The gallery: one section per view, the wide shot shown and the narrow one linked.
 const VIEWS = [
-  ['band', 'Band above the prompt', 'The pills: gauges, what runs now, totals.'],
+  ['band', 'Band above the prompt', 'Tiles: context with its auto-compact mark, cache, the 5-hour and weekly limits, work.'],
+  ['band-enterprise', 'Band on an enterprise account', 'A spend limit instead of plan windows: the budget in dollars with the even-pace tick and the projection, and this chat.'],
   ['trace', 'Trace tab', 'Where the time went: every model call, tool call and subagent of one prompt on a shared time axis.'],
   ['usage', 'Usage tab', 'Context, plan limits, money, session stats, and the prompt cache: window, hit rate, switches, each request.'],
-  ['files', 'Files tab', 'Reads, edits and re-reads per file.'],
-  ['debug', 'Debug tab', 'Which events the recorder has seen.'],
+  ['usage-enterprise', 'Usage tab on an enterprise account', 'The budget card: the month as a burn-down (what was spent, the even pace, the limit, where the month ends at this pace).'],
 ]
 const md = ['# Gallery', '', 'Every view of the cockpit, drawn by `make render` from a seeded session (`.shots/shots.test.ts`). The pane\'s element tree is laid out as flexbox HTML in headless Chrome (1 column = 8 px), so this shows the layout, not a capture of the Desktop app. Each view is shown 120 columns wide; the 52-column version is linked. `big` is the same session with about 110 more subagents.', '']
 for (const [id, title, what] of VIEWS) {
