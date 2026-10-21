@@ -138,7 +138,7 @@ test('every pane tab draws a valid tree on both surfaces', async ($, on) => {
       await ui.press({ key: 'tab-' + id })
       expect(await ui.find({ key: 'tab-' + id })).toBeDefined()
     }
-    await ui.press({ key: 'tab-trace' })
+    await ui.press({ key: 'tab-usage' })
     expect(await ui.find({ type: 'Text', text: 'Tools this session' })).toBeDefined()
     expect(await ui.find({ type: 'Text', text: 'Read' })).toBeDefined()
     await ui.press({ key: 'tab-debug' })
@@ -161,9 +161,8 @@ test('the now pill and the Agents tab count launched, running, finished and fail
     expect(await seen(band, surface, /1 agent/)).toBeDefined() // the now pill counts the one still running
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    expect(await ui.find({ type: 'Text', text: /3 subagents · 1 done · 1 running · 1 failed/ })).toBeDefined()
-    await ui.press({ key: 'sp-a:ag1' })
-    expect(await ui.find({ type: 'Text', text: /found it/ })).toBeDefined()
+    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.source).toContain('Handed back: found it')
+    else expect(await ui.find({ type: 'Text', text: /^ +three$/ })).toBeDefined()
     await ui.unmount()
   }
 })
@@ -187,7 +186,7 @@ test('a model switch shows what it cost the cache, and the Cache tab lists it', 
   }
 })
 
-test('subagents nest under the loop that spawned them in Trace, with their step progress and the plan', async ($, on) => {
+test('subagents get a lane under the loop that spawned them, with their step progress', async ($, on) => {
   await boot($, on)
   const spawn = (d: string, parentAgentId?: string) =>
     ($ as any).agent.spawn({ tool_use_id: 'x' + d, prompt: 'p', description: d, subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false, parentAgentId })
@@ -201,10 +200,8 @@ test('subagents nest under the loop that spawned them in Trace, with their step 
     expect(await seen(band, surface, /1 agent/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    expect(await ui.find({ type: 'Text', text: /child task/ })).toBeDefined() // nested under lead task's row
-    expect(await ui.find({ type: 'Text', text: /plan release 1\/2/ })).toBeDefined()
-    await ui.press({ key: 'sp-a:' + lead.agentId })
-    expect(await ui.find({ type: 'Text', text: /step 2\/5 · reading code/ })).toBeDefined()
+    if (surface === 'desktop') expect((await ui.find({ type: 'Svg' })).props.alt).toMatch(/lead task \(Explore.*step 2\/5\), child task/)
+    else expect(await ui.find({ type: 'Text', text: /^ {4}child task$/ })).toBeDefined() // two levels in: under lead task
     await ui.unmount()
   }
 })
@@ -230,8 +227,7 @@ test('loops the engine never announced (workflow agents) are recorded from their
   await $.turn.complete({ turnId: 'w1', agentId: 'wf-1', reason: 'answer', answer: 'checked', durationMs: 5, isAborted: false, usage: null })
   await runTool($, 'Read', { file_path: '/work/b.ts' }, 'wf-2')
   const ui = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
-  expect(await ui.find({ type: 'Text', text: /2 subagents · 1 done · 1 running/ })).toBeDefined()
-  expect(await ui.find({ type: 'Text', text: /unlisted/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: / unlisted/ })).toBeDefined()
   await ui.unmount()
 })
 
@@ -248,8 +244,7 @@ test('120 parallel subagents: counted, summarised, and only the ones worth a loo
     expect(await seen(band, surface, /20 agents/)).toBeDefined()
     await band.unmount()
     const ui = await $.ui.mount({ ...PANE, surface } as any)
-    expect(await ui.find({ type: 'Text', text: /120 subagents · 99 done · 20 running · 1 failed · most at once 120/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /more rows/ })).toBeDefined() // the list is capped, not 120 rows
+    expect(await ui.find({ type: 'Text', text: /\+ 97 more subagents not drawn/ })).toBeDefined() // 24 lanes, not 121
     await ui.unmount()
   }
 })
@@ -392,38 +387,30 @@ test('the trace survives a snapshot and restore', () => {
   expect(back.trace).toBe('u:t1')
 })
 
-test('the Trace tab draws the waterfall on both surfaces; rows select, open and close, and the card shows the error', async ($, on) => {
+test('the Trace tab draws one lane per loop on both surfaces, with tooltips on Desktop and paging between prompts', async ($, on) => {
   await boot($, on)
-  // a second prompt with a failing tool and a subagent that runs one tool
-  await $.turn.start({ text: 'fix the checkout', turnId: 't2' })
+  await $.turn.start({ text: '<pasted_content id="x">fix the checkout</pasted_content>', turnId: 't2' })
   await $.session.append({ message: { type: 'assistant', content: [{ type: 'tool_use', id: 'tu-fail', name: 'Bash', input: { command: 'pnpm test checkout' } }] } } as any)
   await $.session.append({ message: { type: 'user', content: [{ type: 'tool_result', tool_use_id: 'tu-fail', content: [{ type: 'text', text: '2 of 14 checkout tests fail' }], is_error: true }] } } as any)
   const r = await $.agent.spawn({ tool_use_id: 'u-sub', prompt: 'p', description: 'read the tests', subagentType: 'Explore', provider: { plugin: 'engine', tier: 'core' }, parentModel: 'm', background: false, fork: false } as any)
   await runTool($, 'Grep', { pattern: 'coupon' }, r.agentId)
-  for (const surface of ['terminal', 'desktop'] as const) {
-    const ui = await $.ui.mount({ ...PANE, surface } as any)
-    await ui.press({ key: 'tab-trace' })
-    for (const needle of [/^Trace$/, /fix the checkout/, /● live/, /trace 2 of 2/, /tool calls/, /read the tests/, /Grep/, /coupon/]) expect([surface, needle, !!(await ui.find({ type: 'Text', text: needle }))]).toEqual([surface, needle, true])
-    // the failed Bash: select it, the card shows what failed
-    expect(await ui.find({ type: 'Text', text: /2 of 14 checkout tests fail/ })).toBeUndefined()
-    await ui.press({ key: 'sp-t:tu-fail' })
-    expect(await ui.find({ type: 'Text', text: /2 of 14 checkout tests fail/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /tool call · failed/ })).toBeDefined()
-    // close the subagent: its tool row goes; open it again: it is back
-    const agentKey = 'sp-a:' + r.agentId
-    await ui.press({ key: 'fold-a:' + r.agentId })
-    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
-    await ui.press({ key: 'fold-a:' + r.agentId })
-    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeDefined()
-    // show failed only: the Bash stays, the subagent's Grep goes; back to all
-    await ui.press({ key: 'filter-failed' })
-    expect(await ui.find({ type: 'Text', text: /pnpm test checkout/ })).toBeDefined()
-    expect(await ui.find({ type: 'Text', text: /coupon/ })).toBeUndefined()
-    await ui.press({ key: 'filter-all' })
-    // page back to the first trace and forth again
-    await ui.press({ key: 'trace-prev' })
-    expect(await ui.find({ type: 'Text', text: /trace 1 of 2/ })).toBeDefined()
-    await ui.press({ key: 'trace-next' })
-    await ui.unmount()
-  }
+  // desktop: one interactive SVG; the lanes are named in its alt, each block's detail in its <title>
+  const d = await $.ui.mount({ ...PANE, surface: 'desktop' } as any)
+  expect(await d.find({ type: 'Text', text: /^fix the checkout$/ })).toBeDefined() // the paste's tags are gone from the title
+  expect(await d.find({ type: 'Text', text: /Running · .* tokens/ })).toBeDefined()
+  const svg = await d.find({ type: 'Svg' })
+  expect(svg.props.isInteractive).toBe(true)
+  expect(svg.props.alt).toMatch(/Main session .*read the tests \(Explore/)
+  expect(svg.props.source).toContain('Bash: pnpm test checkout')
+  expect(svg.props.source).toContain('failed: 2 of 14 checkout tests fail')
+  expect(svg.props.source).toContain('Grep: coupon')
+  await d.press({ key: 'trace-prev' })
+  expect(await d.find({ type: 'Text', text: /^1 of 2$/ })).toBeDefined()
+  await d.press({ key: 'trace-next' })
+  await d.unmount()
+  // terminal: one row per lane, the failed call drawn red
+  const t = await $.ui.mount({ ...PANE, surface: 'terminal' } as any)
+  expect(await t.find({ type: 'Text', text: /^Main session$/ })).toBeDefined()
+  expect(await t.find({ type: 'Text', text: /read the tests/ })).toBeDefined()
+  await t.unmount()
 })

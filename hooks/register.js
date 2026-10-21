@@ -25,8 +25,8 @@ import { band, paneBody, pillSpecs } from '../lib/pills.js'
 const PANE = 'cockpit'
 let S = newState()
 let tab = 'trace'
-// Trace tab: which trace is shown (null = the latest), rows opened or closed by hand, the selected span.
-let view = { root: null, open: {}, sel: null, filter: null }
+// Trace tab: which trace is shown (null = the latest).
+let view = { root: null }
 let tickN = 0
 let shown = '' // what the band showed at the last redraw: the tick redraws only when it changes
 
@@ -260,7 +260,7 @@ export function register(on) {
       return { text: a[1] === 'auto' ? 'account type: read from the limits the account reports' : 'account type pinned to ' + a[1] }
     }
     if (a[0] === 'reset') {
-      view = { root: null, open: {}, sel: null }
+      view = { root: null }
       S = newState(S.ttlMin)
       S.startedAt = await $.clock.now()
       return { text: 'cockpit stats cleared' }
@@ -359,23 +359,11 @@ export function register(on) {
     const { Box, Text, Button, Svg } = $.ui.resolve(e)
     const now = await $.clock.now()
     const redraw = () => $.ui.invalidate('ui.render')
-    // What the Trace tab's buttons do: select a span (null closes its card), open or close a parent, page between traces.
+    // The Trace tab's buttons page between traces.
     const ctl = {
       ...view,
-      press: (id) => {
-        view.sel = id
-        redraw()
-      },
-      toggle: (id, isOpen) => {
-        view.open = { ...view.open, [id]: !isOpen }
-        redraw()
-      },
       show: (rootId) => {
-        view = { ...view, root: rootId, open: {}, sel: null }
-        redraw()
-      },
-      setFilter: (f) => {
-        view = { ...view, filter: f === 'all' ? null : f }
+        view = { root: rootId }
         redraw()
       },
     }

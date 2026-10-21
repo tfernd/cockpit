@@ -13,6 +13,7 @@ Who reads this: any agent working on this repo, and the owner. For what the plug
 | `hooks/register.js` | Only file that touches `$` (the engine API). Registers hooks, the `/cockpit` command, the `step` and `plan` tools, the 1 s tick, 15 s persistence. Keep every `$` call written in full here: `claude plugin validate` needs to see them. |
 | `lib/model.js` | State (`newState`) and pure mutators (`onToolStart`, `onStepEnd`, `onSpawn`, `alerts`, ...). No `$`, no I/O, so it is unit-testable. Also pricing (`PRICES`) and the toast rules in `alerts()`. |
 | `lib/views.js` | Pane tabs (`TABS`, `BODIES`) and formatting helpers, built from `Box` / `Text` passed in. |
+| `lib/lanes.js` | The Trace tab's swimlanes: `lanesOf()` (one lane per loop, pure data), `lanesSvg()` (Desktop), `laneCells()` (terminal). |
 | `lib/pills.js` | `pillSpecs()` decides *what* pills to show (pure data); terminal renderer (colored Boxes); `band()` and `paneBody()`. |
 | `lib/svgband.js` | Desktop renderer: pills as one SVG in greedy rows (fixed order, no re-balancing), justified. |
 | `tests/cockpit.test.ts` | Tests using `claude-code/testing`. |
