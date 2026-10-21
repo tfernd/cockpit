@@ -19,8 +19,8 @@ import {
   restore as restoreState,
   resolveTtl,
 } from '../lib/model.js'
-import { TABS } from '../lib/views.js'
-import { band, paneBody, pillSpecs } from '../lib/pills.js'
+import { TABS, paneBody } from '../lib/views.js'
+import { band, bandTiles } from '../lib/band.js'
 
 const PANE = 'cockpit'
 let S = newState()
@@ -113,6 +113,19 @@ async function refreshTtl($) {
   S.ttlSource = r.src
 }
 
+// Where auto-compaction will run: the context breakdown knows it, counted locally (the 'summary' form sends no request).
+async function refreshCompact($) {
+  try {
+    const b = (await $.session.usage({ breakdown: 'summary' })).context.breakdown
+    if (b) {
+      S.autoCompact = b.isAutoCompactEnabled
+      S.compactAt = b.isAutoCompactEnabled ? b.autoCompactThreshold ?? null : null
+    }
+  } catch {
+    // no breakdown in this build: the context tile shows no compaction mark
+  }
+}
+
 async function tick($) {
   const now = await $.clock.now()
   tickN++
@@ -123,13 +136,16 @@ async function tick($) {
       // usage not available yet; try again next time
     }
   }
-  if (tickN % 60 === 0) await refreshTtl($).catch(() => {}) // settings and env rarely change: once a minute is enough
+  if (tickN % 60 === 0) {
+    await refreshTtl($).catch(() => {}) // settings and env rarely change: once a minute is enough
+    await refreshCompact($)
+  }
   trackPeak(S)
   closeStale(S, now)
   for (const text of alerts(S, now)) $.ui.toast('cockpit: ' + text, { timeoutMs: 6000 })
   // Redraw when the band would read differently, or every 5 s while something runs (the Trace tab's lanes grow).
   // Not every second: on Desktop each redraw swaps the whole SVG, and a swap every second reads as blinking.
-  const sig = JSON.stringify(pillSpecs(S, now))
+  const sig = JSON.stringify(bandTiles(S, now))
   const busy = Object.keys(S.running).length || S.curTurn || Object.values(S.agents).some((a) => a.status === 'running')
   if (sig !== shown || (busy && tickN % 5 === 0)) {
     shown = sig
@@ -172,6 +188,7 @@ export function register(on) {
     try {
       await refresh($) // show context and plan limits straight away, before any turn
       await refreshTtl($)
+      await refreshCompact($)
     } catch {
       // usage not available yet; the ticker retries
     }
@@ -383,7 +400,7 @@ export function register(on) {
     )
     return Box({
       flexDirection: 'column',
-      children: [Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, e.surface, Svg, Button, ctl)],
+      children: [Box({ flexDirection: 'row', flexWrap: 'wrap', columnGap: 2, children: tabs }), Text({ children: [' '] }), paneBody(Box, Text, tab, S, now, e.props.bodyColumns, { Button, ctl, surface: e.surface, Svg })],
     })
   })
 }

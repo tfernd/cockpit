@@ -7,7 +7,7 @@ The plan for cockpit's next version: a trace waterfall ("where did the time go")
 Seen in `assets/` and the code:
 
 1. **No time axis.** The pane is seven tabs of counts and mean/sd/p95/p99 tables. Nothing answers "which subagent or tool took the time", which is the question we open it for. Timeline is a text list of "20.0s ago" lines that shift every second.
-2. **The band jumps.** On desktop it is one SVG image whose pill widths are guessed (`textW` in `lib/svgband.js`); `balance()` re-cuts the rows on every redraw, and the 1 s tick (`tick` in `hooks/register.js`) redraws every second. "2h 30m" becoming "2h 29m" can move pills between rows.
+2. **The band jumps.** On desktop it is one SVG image whose pill widths are guessed (by a width estimate; that renderer was replaced in 0.20.0); `balance()` re-cuts the rows on every redraw, and the 1 s tick (`tick` in `hooks/register.js`) redraws every second. "2h 30m" becoming "2h 29m" can move pills between rows.
 3. **Pills vanish.** At 52 columns the band keeps 3 of 8 pills by `pri`, without saying so (`assets/band-52.png`).
 4. **Repeats.** Overview repeats the band; Agents repeats Overview; Cache, Tools and Overview each show token totals.
 5. **Heavy colour.** Full-saturation green and yellow bars (Budget card, Cache requests), and green means both "good" and "read from cache".

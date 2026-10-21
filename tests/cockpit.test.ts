@@ -37,10 +37,10 @@ async function boot($: any, on: any, opts: { limits?: any[]; budget?: number; sp
   on('agent.list', () => ({ value: [] }))
   on('command.register', () => ({ value: undefined }))
   on('ui.toast', () => ({ value: undefined }))
-  on('session.usage', () => ({
+  on('session.usage', (_: any, e: any) => ({
     value: {
       startedAt: 0,
-      context: { tokens: 280_000, window: 1_000_000, percent: 28 },
+      context: { tokens: 280_000, window: 1_000_000, percent: 28, ...(e && e.breakdown ? { breakdown: { isAutoCompactEnabled: true, autoCompactThreshold: 920_000 } } : {}) },
       rateLimits: opts.limits ?? [
         { kind: 'five_hour', percentUsed: 22, resetsAt: new Date(Date.now() + 9_000_000).toISOString() },
         { kind: 'seven_day', percentUsed: 58, resetsAt: new Date(Date.now() + 90_000_000).toISOString() },
@@ -85,12 +85,12 @@ async function runTool($: any, tool: string, input: Record<string, unknown> = {}
   await $.session.append({ agentId, message: { type: 'user', content: [{ type: 'tool_result', tool_use_id: id, content: 'ok', is_error: isError }] } })
 }
 
-test('the band draws context, cache, turn and limits on both surfaces', async ($, on) => {
+test('the band draws context with its compaction mark, cache, limits and work on both surfaces', async ($, on) => {
   await boot($, on)
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
     const missing: string[] = []
-    for (const needle of [/context/, /28%/, /5h/, /22%/, /7d/, /58%/, /⟳2h/, /cache/, /last turn/, /3 tools/]) {
+    for (const needle of [/context/i, /28%/, /compacts 92%/, /5-hour/i, /22%/, /week/i, /58%/, /resets in 2h/, /cache/i, /from cache/, /idle/, /last turn/]) {
       if (!(await seen(ui, surface, needle))) missing.push(surface + ' ' + needle)
     }
     expect(missing).toEqual([])
@@ -102,19 +102,17 @@ test('the band draws context, cache, turn and limits on both surfaces', async ($
   }
 })
 
-test('on Desktop a band that wraps is stretched edge to edge; a short one keeps its natural width', async ($, on) => {
+test('on Desktop the band is one SVG as wide as its slot; narrow, its tiles wrap into rows', async ($, on) => {
   await boot($, on)
-  // 60 columns * 8px = 480px: too narrow for one row, so every row but a short last one is justified to exactly 480
+  // 60 columns: (60 - 2) * 8 = 464 px, three tiles of 150 px to a row, so five tiles take two rows
   const narrow = await $.ui.mount({ ...BAND, props: { ...BAND.props, bodyColumns: 60 }, surface: 'desktop' } as any)
   const svg = await narrow.find({ type: 'Svg' })
-  expect(svg.props.width).toBe(480)
-  expect(svg.props.source).toContain('width="480"')
+  expect([svg.props.width, svg.props.height]).toEqual([464, 140])
   await narrow.unmount()
-  // 120 columns: everything fits on one row, which is also the last row, so it is not stretched across the slot
+  // 120 columns: all five tiles on one row
   const wide = await $.ui.mount({ ...BAND, surface: 'desktop' } as any)
   const w = await wide.find({ type: 'Svg' })
-  expect(w.props.width).toBeLessThanOrEqual(962)
-  expect(w.props.source).toContain('width="' + w.props.width + '"')
+  expect([w.props.width, w.props.height]).toEqual([944, 70])
   await wide.unmount()
 })
 
@@ -122,10 +120,10 @@ test('an enterprise / gateway account shows chat cost, the month with its projec
   await boot($, on, { limits: [{ kind: 'spend_limit', percentUsed: 42, resetsAt: new Date(Date.now() + 864_000_000).toISOString() }], budget: 200, spend: true })
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    for (const needle of [/spend/, /42%/, /chat/, /1\.23/, /month/, /\$142/, /→ ~\$/, /\/\$200/]) {
+    for (const needle of [/spend/i, /42%/, /cost/i, /1\.23/, /this month/, /\$142/, /→ ~\$/, /of \$200/]) {
       expect(await seen(ui, surface, needle)).toBeDefined()
     }
-    expect(await seen(ui, surface, /5h/)).toBeUndefined() // no 5-hour window on a gateway account
+    expect(await seen(ui, surface, /5-hour/i)).toBeUndefined() // no 5-hour window on a gateway account
     await ui.unmount()
   }
 })
@@ -263,7 +261,7 @@ test('a pinned account type shows API money even when the account reports no lim
   await boot($, on, { limits: [], budget: 200, spend: true })
   await $.command.run({ command: 'cockpit', args: 'account api' } as any)
   const ui = await $.ui.mount({ ...BAND, surface: 'terminal' } as any)
-  expect(await seen(ui, 'terminal', /chat/)).toBeDefined()
+  expect(await seen(ui, 'terminal', /COST/)).toBeDefined()
   await ui.unmount()
 })
 
@@ -306,7 +304,7 @@ test('subagent caches count from the end of each one\'s last request', () => {
   expect(subCache(S, 700_000).warm).toBe(0)
 })
 
-test('the now pill names the newest tool in flight and counts the others', async ($, on) => {
+test('the work tile counts the tools in flight', async ($, on) => {
   await boot($, on)
   const open = (name: string, agentId?: string) => $.session.append({ agentId, message: { type: 'assistant', content: [{ type: 'tool_use', id: 'p' + name + (agentId ?? ''), name, input: {} }] } })
   await open('Bash')
@@ -314,7 +312,7 @@ test('the now pill names the newest tool in flight and counts the others', async
   await open('Grep', 'ag1')
   for (const surface of ['terminal', 'desktop'] as const) {
     const ui = await $.ui.mount({ ...BAND, surface } as any)
-    for (const needle of [/now/, /Grep/, /\+2 tools/]) expect(await seen(ui, surface, needle)).toBeDefined()
+    for (const needle of [/1 agent/, /3 tools running/]) expect(await seen(ui, surface, needle)).toBeDefined()
     await ui.unmount()
   }
 })

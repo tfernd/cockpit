@@ -38,7 +38,7 @@ test('dump trees for screenshots', async ($: any, on: any) => {
   on('session.usage', () => ({
     value: {
       startedAt: 0,
-      context: { tokens: 612_000, window: 1_000_000, percent: 61 },
+      context: { tokens: 612_000, window: 1_000_000, percent: 61, breakdown: { isAutoCompactEnabled: true, autoCompactThreshold: 920_000 } },
       rateLimits: [
         { kind: 'five_hour', percentUsed: 72, resetsAt: new Date(Date.now() + 9_000_000).toISOString() },
         { kind: 'seven_day', percentUsed: 41, resetsAt: new Date(Date.now() + 250_000_000).toISOString() },

@@ -4,18 +4,12 @@ A Claude Code mod: one recorder, many views. Built against Claude Code 2.1.289. 
 
 ## What you see
 
-**Band above the prompt**: pill badges justified edge to edge, spread evenly over the fewest rows they need (3-3-1 rather than 4-2-1; at most three rows on Desktop, two in the terminal, dropping the lowest-priority pills if they do not fit). On Desktop they are drawn as an SVG (rounded, tinted, icons, thin bars, light and dark theme); in the terminal as colored blocks.
-- context: how full, of what window size (the exact token count is on the Usage tab)
-- *subscription*: 5-hour and weekly windows with reset times
-- *API / enterprise*: spend limit (when the account has one), **chat** cost, and **month** (spent so far → projected, against the budget you set). None of these show on a subscription.
-- *subscription*: a **worth** pill, a guess of what this chat's usage would cost at API rates (≈$ chat, ≈$ month), next to the fee you set with `/cockpit plan 100`
-- cache countdown and hit rate
-- tokens this session: in (new input + cache writes), out, cached (served by the cache)
-- a **model / effort switch** pill for ten minutes after a change, saying whether the cache was kept or re-written
-- The band is laid out in three groups, each on its own rows: gauges (context, cache, limits, plan, tasks), what is happening now (turn, tools, crew), and totals (tokens, money, model switch).
-- current turn and task progress (from `TodoWrite`), plus the plan pill while a posted plan has tasks left
-- **tools pill** (only while tools run): how many run in parallel right now, how many of them are inside subagents, and the most seen at once
-- **crew pill** (only while subagents are running): done / total, one square per subagent in spawn order (blue running, grey done, red failed, amber stopped, hollow = planned and not started; brighter as its context fills), and failed / running counts. Crews over forty are grouped, each square showing the busiest state in its group.
+**Band above the prompt**: a strip of tiles, each a small label, a big number, a thin bar and one line of detail. On Desktop one SVG (light and dark theme), in the terminal coloured Boxes; narrow, the tiles wrap into rows. Colour changes only when something needs a look: amber, then red.
+- **Context**: how full, tokens of the window, and a tick on the bar where auto-compaction will run (from Claude Code's own context breakdown); after a compaction, how many there were.
+- **Cache**: how long the prompt cache stays warm, and whether the last call really read from it ("98% from cache", or "last call missed: wrote 140k").
+- **5-hour** and **Week** (subscriptions) or **Spend** (gateway and enterprise accounts): % used and when it resets.
+- **Cost** (API accounts only): this chat, and the month spent → projected against the budget you set. Never on a subscription.
+- **Work**: agents running, done and failed, tools in flight, todo and plan progress; on Desktop a dot per subagent.
 
 **`/cockpit` pane** (keys 1-4 switch tabs):
 1. **Trace** (opens first): where the time went in one prompt, as swimlanes. The main session and each subagent (under the one that spawned it) get a lane with their model; their thinking (faded) and tool calls (solid) sit on one time axis, a dashed track while they wait, a line where work was handed off, failed calls in red; a triangle over a model call marks a cache write (amber) or a cache miss (red), and its tooltip says how much was read and written and whether the cache had expired. A drawn legend explains every mark. On Desktop, once the trace is done, hover a block for its detail (a live trace is drawn as a plain image: an interactive SVG reloads its frame on every update and blinks) (the command or file, how long, tokens, the error); hover a name for the subagent's answer. Time counts from the latest prompt (0s); the one before shows as a short lead-in (a quarter of the latest's length, negative time), each prompt marked where it began (◆ and its words), so a new message does not start from nothing. Between turns the main lane is idle (a dotted line: waiting on you), not waiting; a finished subagent ends in ✓. A subagent whose end the mod never heard is closed from Claude Code's own agent list; ◀ ▶ show one earlier prompt at a time. A turn its subagents wake stays in the same trace.
